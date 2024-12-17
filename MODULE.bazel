@@ -1,7 +1,5 @@
 module(name = "onedal")
 
-bazel_dep(name = "bazel_skylib", version = "1.7.1")
-
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 
@@ -25,7 +23,7 @@ opencl_repo(
     name = "opencl",
 )
 
-opencl_repo = use_repo_rule("@onedal//dev/bazel/deps:openblas.bzl", "openblas_repo")
+openblas_repo = use_repo_rule("@onedal//dev/bazel/deps:openblas.bzl", "openblas_repo")
 openblas_repo(
     name = "openblas",
     root_env_var = "OPENBLASROOT",
