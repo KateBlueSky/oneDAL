@@ -36,6 +36,8 @@
 #include "src/externals/service_math.h"
 #include "src/algorithms/k_nearest_neighbors/knn_heap.h"
 
+#include <iostream>
+
 namespace daal
 {
 namespace algorithms
@@ -65,13 +67,16 @@ public:
     {
         using bf_knn_classification::prediction::internal::PairwiseDistanceType;
 
+        std::cout << "bf_knn_impl.i 1" << std::endl;
         const size_t nDims  = trainTable->getNumberOfColumns();
         const size_t nTrain = trainTable->getNumberOfRows();
         const size_t nTest  = testTable->getNumberOfRows();
 
+        std::cout << "bf_knn_impl.i 2" << std::endl;
         FPType * trainLabel = nullptr;
         BlockDescriptor<FPType> trainLabelBlock;
 
+        std::cout << "bf_knn_impl.i 3" << std::endl;
         NumericTable * newTrainLabelTable = const_cast<NumericTable *>(trainLabelTable);
         if (resultsToEvaluate & daal::algorithms::classifier::computeClassLabels)
         {
@@ -80,26 +85,33 @@ public:
             DAAL_CHECK_MALLOC(trainLabel);
         }
 
+        std::cout << "bf_knn_impl.i 4" << std::endl;
         services::SharedPtr<PairwiseDistances<FPType, cpu> > dist;
 
+        std::cout << "bf_knn_impl.i 5" << std::endl;
         if (pairwiseDistance == PairwiseDistanceType::minkowski && minkowskiDegree == 2.0)
         {
+            std::cout << "bf_knn_impl.i 6" << std::endl;
             dist.reset(new EuclideanDistances<FPType, cpu>(*testTable, *trainTable, true));
         }
         else if (pairwiseDistance == PairwiseDistanceType::minkowski)
         {
+            std::cout << "bf_knn_impl.i 7" << std::endl;
             dist.reset(new MinkowskiDistances<FPType, cpu>(*testTable, *trainTable, true, minkowskiDegree));
         }
         else if (pairwiseDistance == PairwiseDistanceType::chebyshev)
         {
+            std::cout << "bf_knn_impl.i 8" << std::endl;
             dist.reset(new ChebyshevDistances<FPType, cpu>(*testTable, *trainTable));
         }
         else if (pairwiseDistance == PairwiseDistanceType::cosine)
         {
+            std::cout << "bf_knn_impl.i 9" << std::endl;
             dist.reset(new CosineDistances<FPType, cpu>(*testTable, *trainTable));
         }
         else
         {
+            std::cout << "bf_knn_impl.i 10" << std::endl;
             dist.reset(new EuclideanDistances<FPType, cpu>(*testTable, *trainTable, true));
         }
 
@@ -117,21 +129,28 @@ public:
 
         SafeStatus safeStat;
 
+        std::cout << "bf_knn_impl.i 11" << std::endl;
+
         daal::threader_for(nOuterBlocks, nOuterBlocks, [&](size_t outerBlock) {
             const size_t outerStart = outerBlock * outBlockSize;
             const size_t outerEnd   = outerBlock + 1 == nOuterBlocks ? nTest : outerStart + outBlockSize;
             const size_t outerSize  = outerEnd - outerStart;
 
+            
             DAAL_CHECK_STATUS_THR(computeKNearestBlock(dist.get(), outerSize, inBlockSize, outerStart, nTrain, resultsToEvaluate, resultsToCompute,
                                                        nClasses, k, voteWeights, trainLabel, trainTable, testTable, testLabelTable, indicesTable,
                                                        distancesTable, tlsDistances, tlsIdx, tlsKDistances, tlsKIndexes, tlsVoting, nOuterBlocks));
+        
+            
         });
 
+        std::cout << "bf_knn_impl.i 12" << std::endl;
         if (resultsToEvaluate & daal::algorithms::classifier::computeClassLabels)
         {
             newTrainLabelTable->releaseBlockOfRows(trainLabelBlock);
         }
 
+        std::cout << "bf_knn_impl.i 13" << std::endl;
         return safeStat.detach();
     }
 
@@ -145,23 +164,33 @@ protected:
 
         static BruteForceTask * create(const size_t inBlockSize, const size_t outBlockSize, const size_t k)
         {
+            //std::cout << "bf_knn_impl.i 14" << std::endl;
             auto object = new BruteForceTask(inBlockSize, outBlockSize, k);
             if (object && object->isValid()) return object;
             delete object;
+            //std::cout << "bf_knn_impl.i 15" << std::endl;
             return nullptr;
         }
 
-        bool isValid() const { return _buff.get() && _heaps.get(); }
+        bool isValid() const { 
+            //std::cout << "bf_knn_impl.i 16" << std::endl;
+            return _buff.get() && _heaps.get(); 
+            
+            }
 
     private:
         BruteForceTask(size_t inBlockSize, size_t outBlockSize, size_t k)
         {
+            
             _buff.reset(outBlockSize);
+            
             maxs = _buff.get();
             service_memset_seq<FPType, cpu>(maxs, MaxVal<FPType>::get(), outBlockSize);
 
+            
             _heaps.reset(outBlockSize);
 
+            
             for (size_t i = 0; i < outBlockSize; ++i)
             {
                 _heaps[i].init(k);
@@ -189,17 +218,27 @@ protected:
         const size_t i2    = startTestIdx + blockSize;
         const size_t iSize = blockSize;
 
+        std::cout << "Hi" << std::endl;
         ReadRows<FPType, cpu> inDataRows(const_cast<NumericTable *>(testTable), i1, i2 - i1);
         DAAL_CHECK_BLOCK_STATUS(inDataRows);
+        
         const FPType * const testData = inDataRows.get();
 
+        std::cout << "Hi 1" << std::endl;
         DAAL_OVERFLOW_CHECK_BY_MULTIPLICATION(size_t, blockSize, k);
+        
+        std::cout << "Hi 2" << std::endl;
         DAAL_OVERFLOW_CHECK_BY_MULTIPLICATION(size_t, inBlockSize, k);
+        
+        std::cout << "Hi 3" << std::endl;
         DAAL_OVERFLOW_CHECK_BY_MULTIPLICATION(size_t, inBlockSize * sizeof(int), k);
+        
+        std::cout << "Hi 4" << std::endl;
         DAAL_OVERFLOW_CHECK_BY_MULTIPLICATION(size_t, inBlockSize * sizeof(FPType), k);
 
         SafeStatus safeStat;
 
+        std::cout << "Hi 5" << std::endl;
         daal::static_tls<BruteForceTask *> tlsTask([=, &safeStat]() {
             auto tlsData = BruteForceTask::create(inBlockSize, iSize, k);
             if (!tlsData)
@@ -209,7 +248,11 @@ protected:
             return tlsData;
         });
 
+        //std::cout << "bf_knn_impl.i 17" << std::endl;
+        std::cout << "Hi 6" << std::endl;
         const size_t nThreads = _daal_threader_get_max_threads();
+
+        //std::cout << "bf_knn_impl.i 18" << std::endl;
         daal::conditional_static_threader_for(nOuterBlocks < 2 * nThreads, nInBlocks, [&](size_t inBlock, size_t tid) {
             const size_t j1    = inBlock * inBlockSize;
             const size_t j2    = (inBlock + 1 == nInBlocks ? inRows : j1 + inBlockSize);
@@ -246,19 +289,25 @@ protected:
             }
         });
 
+        std::cout << "Hi 7" << std::endl;
         int * kIndexes = tlsKIndexes.local();
         DAAL_CHECK_MALLOC(kIndexes);
 
+        std::cout << "Hi 8" << std::endl;
         FPType * kDistances = tlsKDistances.local();
         DAAL_CHECK_MALLOC(kDistances);
 
+        std::cout << "Hi 9" << std::endl;
         TArrayScalable<HeapType, cpu> heaps(iSize);
 
+        
         for (size_t i = 0; i < iSize; ++i)
         {
             heaps[i].init(k);
         }
 
+        //std::cout << "bf_knn_impl.i 19" << std::endl;
+        std::cout << "Hi 10" << std::endl;
         tlsTask.reduce([&](BruteForceTask * tls) {
             HeapType * heapsLocal = tls->heapsData;
             for (size_t i = 0; i < iSize; i++)
@@ -273,6 +322,8 @@ protected:
             delete tls;
         });
 
+        std::cout << "Hi 11" << std::endl;
+        //std::cout << "bf_knn_impl.i 20" << std::endl;
         for (size_t i = 0; i < iSize; i++)
         {
             for (size_t kk = 0; kk < k; ++kk)
@@ -283,23 +334,38 @@ protected:
         }
         distancesInstance->finalize(iSize * k, kDistances);
 
+        //std::cout << "bf_knn_impl.i 21" << std::endl;
         // sort by distances
+        std::cout << "Hi 12" << std::endl;
         for (size_t i = 0; i < iSize; ++i)
         {
             qSort<FPType, int, cpu>(k, kDistances + i * k, kIndexes + i * k);
         }
 
+        //std::cout << "bf_knn_impl.i 22" << std::endl;
+        std::cout << "Hi 13" << std::endl;
         if (resultsToCompute & computeIndicesOfNeighbors)
         {
+            std::cout << "Hi 13.1" << std::endl;
             daal::internal::WriteOnlyRows<int, cpu> indexesBlock(indicesTable, startTestIdx, iSize);
+            std::cout << "Hi 13.2" << std::endl;
             DAAL_CHECK_BLOCK_STATUS(indexesBlock);
+            std::cout << "Hi 13.3" << std::endl;
             int * indices = indexesBlock.get();
+            std::cout << "Hi 13.4" << std::endl;
+
 
             DAAL_OVERFLOW_CHECK_BY_MULTIPLICATION(size_t, blockSize * sizeof(*indices), k);
+            std::cout << "Hi 13.5" << std::endl;
             const size_t size = blockSize * k * sizeof(*indices);
+            std::cout << "Hi 13.6" << std::endl;
             DAAL_CHECK(!daal::services::internal::daal_memcpy_s(indices, size, kIndexes, size), daal::services::ErrorMemoryCopyFailedInternal);
+            std::cout << "Hi 13.7" << std::endl;
+        
         }
 
+        //std::cout << "bf_knn_impl.i 23" << std::endl;
+        std::cout << "Hi 14" << std::endl;
         if (resultsToCompute & computeDistances)
         {
             daal::internal::WriteOnlyRows<FPType, cpu> distancesBlock(distancesTable, startTestIdx, iSize);
@@ -311,6 +377,8 @@ protected:
             DAAL_CHECK(!daal::services::internal::daal_memcpy_s(distances, size, kDistances, size), daal::services::ErrorMemoryCopyFailedInternal);
         }
 
+        //std::cout << "bf_knn_impl.i 24" << std::endl;
+        std::cout << "Hi 15" << std::endl;
         if (resultsToEvaluate & daal::algorithms::classifier::computeClassLabels)
         {
             daal::internal::WriteOnlyRows<int, cpu> testLabelRows(testLabelTable, startTestIdx, iSize);
@@ -330,6 +398,7 @@ protected:
             }
         }
 
+        std::cout << "Hi 16" << std::endl;
         return services::Status();
     }
 

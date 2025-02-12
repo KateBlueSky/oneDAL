@@ -28,6 +28,7 @@
 #include "services/daal_memory.h"
 #include "services/error_id.h"
 #include "services/daal_atomic_int.h"
+#include <iostream>
 
 namespace daal
 {
@@ -404,8 +405,11 @@ void SharedPtr<T>::reset(U * ptr, const D & deleter)
 template <class T, class U>
 SharedPtr<T> staticPointerCast(const SharedPtr<U> & r)
 {
+    //std::cout << "static pointer cast 1" << std::endl;
     T * shifted = static_cast<T *>(r.get());
+    //std::cout << "static pointer cast 2" << std::endl;
     T * start   = static_cast<T *>(r.getStartPtr());
+    //std::cout << "static pointer cast 3" << std::endl;
     return SharedPtr<T>(r, start, shifted);
 }
 

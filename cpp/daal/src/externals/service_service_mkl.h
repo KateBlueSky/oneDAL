@@ -29,6 +29,7 @@
 #include <mkl.h>
 #include <mkl_service.h>
 #include <string.h>
+#include <iostream>
 
 namespace daal
 {
@@ -40,9 +41,15 @@ struct MklService
 {
     static void * serv_malloc(size_t size, size_t alignment) { return MKL_malloc(size, alignment); }
 
-    static void serv_free(void * ptr) { MKL_free(ptr); }
+    static void serv_free(void * ptr) { 
+        //std::cout << "MKL_free" << std::endl;
+        MKL_free(ptr); 
+    }
 
-    static void serv_free_buffers() { MKL_Free_Buffers(); }
+    static void serv_free_buffers() { 
+        std::cout << "MKL_free_buffers" << std::endl;
+        MKL_Free_Buffers(); 
+    }
 
     static int serv_memcpy_s(void * dest, size_t destSize, const void * src, size_t srcSize)
     {

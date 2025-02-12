@@ -25,6 +25,9 @@
 #include "src/services/daal_strings.h"
 #include "src/services/serialization_utils.h"
 
+#include <iostream>
+#include <stdexcept>
+
 using namespace daal::data_management;
 using namespace daal::services;
 
@@ -49,6 +52,20 @@ Result::Result() : classifier::prediction::Result(lastResultId + 1) {}
  */
 data_management::NumericTablePtr Result::get(ResultId id) const
 {
+    std::cout << "data_management::NumericTablePtr Result::get(ResultId id) const 1" << std::endl;
+    
+    std::cout << Argument::get(id) << std::endl;
+    NumericTablePtr a;
+    a = services::staticPointerCast<data_management::NumericTable, data_management::SerializationIface>(Argument::get(id));
+    std::cout << "done" << std::endl;
+
+    //try{
+        
+    //   services::staticPointerCast<data_management::NumericTable, data_management::SerializationIface>(Argument::get(id))
+    //} catch (const std::exception& e) { 
+    //    std::cerr << "Exception caught: " << e.what() << std::endl;
+    //}
+    
     return services::staticPointerCast<data_management::NumericTable, data_management::SerializationIface>(Argument::get(id));
 }
 
@@ -59,6 +76,7 @@ data_management::NumericTablePtr Result::get(ResultId id) const
  */
 void Result::set(ResultId id, const data_management::NumericTablePtr & value)
 {
+    std::cout << "Result::set(ResultId id, const data_management::NumericTablePtr & value)" << std::endl;
     Argument::set(id, value);
 }
 
@@ -70,11 +88,13 @@ void Result::set(ResultId id, const data_management::NumericTablePtr & value)
  */
 services::Status Result::check(const daal::algorithms::Input * input, const daal::algorithms::Parameter * parameter, int method) const
 {
+    std::cout << "services::Status Result::check(" << std::endl;
     return checkImpl(input, parameter);
 }
 
 services::Status Result::checkImpl(const daal::algorithms::Input * input, const daal::algorithms::Parameter * parameter) const
 {
+    std::cout << "services::Status Result::checkImpl(" << std::endl;
     services::Status s = classifier::prediction::Result::checkImpl(input, parameter);
     DAAL_CHECK_STATUS_VAR(s);
 
