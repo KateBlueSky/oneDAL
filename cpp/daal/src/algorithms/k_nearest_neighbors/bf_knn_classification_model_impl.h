@@ -21,6 +21,7 @@
 #include "algorithms/k_nearest_neighbors/bf_knn_classification_model.h"
 #include "data_management/data/homogen_numeric_table.h"
 #include "services/daal_defines.h"
+#include <iostream>
 
 namespace daal
 {
@@ -35,9 +36,36 @@ class Model::ModelImpl
 public:
     ModelImpl(size_t nFeatures = 0) : _nFeatures(nFeatures) {}
 
-    data_management::NumericTableConstPtr getData() const { return _data; }
+    ~ModelImpl() {
+        std::cout <<"~~ModelImpl()" <<std::endl;
+        
+        try {
+                std::cout <<"~~ModelImpl() data" <<std::endl;
+                _data.reset();
+            }
+            // catch block to catch the thrown exception
+            catch (const std::exception& e) {
+            // print the exception
+            std::cout << "Exception " << e.what() << std::endl;
+        }
 
-    data_management::NumericTablePtr getData() { return _data; }
+
+        std::cout <<"~~ModelImpl() labels" <<std::endl;
+        _labels.reset();
+        
+        
+        std::cout <<"~~ModelImpl() 2" <<std::endl;
+    }
+
+    data_management::NumericTableConstPtr getData() const { 
+        std::cout <<"getData() data const" <<std::endl;
+        return _data; 
+        
+    }
+
+    data_management::NumericTablePtr getData() { 
+        return _data; 
+    }
 
     template <typename Archive, bool onDeserialize>
     services::Status serialImpl(Archive * arch)
@@ -52,25 +80,38 @@ public:
     template <typename algorithmFPType>
     DAAL_EXPORT DAAL_FORCEINLINE services::Status setData(const data_management::NumericTablePtr & value, bool copy)
     {
+        copy = true;
         return setTable<algorithmFPType>(value, _data, copy);
     }
 
-    data_management::NumericTableConstPtr getLabels() const { return _labels; }
+    data_management::NumericTableConstPtr getLabels() const { 
+        return _labels; 
+    
+    }
 
-    data_management::NumericTablePtr getLabels() { return _labels; }
+    data_management::NumericTablePtr getLabels() { 
+        return _labels; 
+        
+    }
 
     template <typename algorithmFPType>
     DAAL_EXPORT DAAL_FORCEINLINE services::Status setLabels(const data_management::NumericTablePtr & value, bool copy)
     {
+        copy = true;
         return setTable<algorithmFPType>(value, _labels, copy);
     }
 
-    size_t getNumberOfFeatures() const { return _nFeatures; }
+    size_t getNumberOfFeatures() const 
+    { 
+        return _nFeatures; 
+        
+    }
 
 protected:
     template <typename algorithmFPType>
     DAAL_FORCEINLINE services::Status setTable(const data_management::NumericTablePtr & value, data_management::NumericTablePtr & dest, bool copy)
     {
+        copy = true;
         if (!copy)
         {
             dest = value;

@@ -50,7 +50,6 @@
    :caption: Contributing Guide
 
    contribution/coding_guide.rst
-   contribution/ideas.rst
 
 .. toctree::
    :maxdepth: 1
