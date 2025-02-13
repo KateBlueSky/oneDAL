@@ -64,6 +64,7 @@ public:
     }
 
     data_management::NumericTablePtr getData() { 
+        std::cout <<"getData()" <<std::endl;
         return _data; 
     }
 
@@ -80,16 +81,20 @@ public:
     template <typename algorithmFPType>
     DAAL_EXPORT DAAL_FORCEINLINE services::Status setData(const data_management::NumericTablePtr & value, bool copy)
     {
-        copy = true;
+
+        //copy = true;
+        std::cout <<"setData()" <<std::endl;
         return setTable<algorithmFPType>(value, _data, copy);
     }
 
     data_management::NumericTableConstPtr getLabels() const { 
+        std::cout <<"getLabels()" <<std::endl;
         return _labels; 
     
     }
 
     data_management::NumericTablePtr getLabels() { 
+        std::cout <<"getLabels()" <<std::endl;
         return _labels; 
         
     }
@@ -97,7 +102,8 @@ public:
     template <typename algorithmFPType>
     DAAL_EXPORT DAAL_FORCEINLINE services::Status setLabels(const data_management::NumericTablePtr & value, bool copy)
     {
-        copy = true;
+        //copy = true;
+        std::cout <<"getLabels()" <<std::endl;
         return setTable<algorithmFPType>(value, _labels, copy);
     }
 
@@ -111,13 +117,14 @@ protected:
     template <typename algorithmFPType>
     DAAL_FORCEINLINE services::Status setTable(const data_management::NumericTablePtr & value, data_management::NumericTablePtr & dest, bool copy)
     {
-        copy = true;
+        //copy = true;
         if (!copy)
         {
             dest = value;
         }
         else
         {
+            std::cout <<"setTable" <<std::endl;
             services::Status status;
             dest = data_management::HomogenNumericTable<algorithmFPType>::create(value->getNumberOfColumns(), value->getNumberOfRows(),
                                                                                  data_management::NumericTable::doAllocate, &status);

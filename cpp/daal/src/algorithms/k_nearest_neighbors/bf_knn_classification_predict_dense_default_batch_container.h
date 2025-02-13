@@ -18,6 +18,7 @@
 #include "algorithms/k_nearest_neighbors/bf_knn_classification_predict.h"
 #include "src/algorithms/k_nearest_neighbors/bf_knn_classification_predict_kernel.h"
 #include "services/error_indexes.h"
+#include <iostream>
 
 namespace daal
 {
@@ -61,6 +62,7 @@ services::Status BatchContainer<algorithmFpType, method, cpu>::compute()
     kernelPar.engine            = par->engine->clone();
     kernelPar.resultsToEvaluate = par->resultsToEvaluate;
 
+    std::cout <<"Compute()" <<std::endl;
     __DAAL_CALL_KERNEL(env, internal::KNNClassificationPredictKernel, __DAAL_KERNEL_ARGUMENTS(algorithmFpType), compute, a.get(), m.get(),
                        label.get(), indices.get(), distances.get(), &kernelPar);
 }
