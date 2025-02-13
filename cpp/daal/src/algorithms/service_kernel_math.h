@@ -130,10 +130,7 @@ public:
         : _a(a), _b(b), _squared(squared), _isSqrtNorm(isSqrtNorm)
     {}
 
-    virtual ~EuclideanDistances() DAAL_C11_OVERRIDE {
-        
-
-    }
+    virtual ~EuclideanDistances() DAAL_C11_OVERRIDE {}
 
     PairwiseDistanceType getType() DAAL_C11_OVERRIDE { return PairwiseDistanceType::euclidean; }
 
