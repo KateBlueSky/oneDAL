@@ -39,6 +39,7 @@
 #include "src/algorithms/k_nearest_neighbors/kdtree_knn_classification_model_impl.h"
 #include "src/algorithms/k_nearest_neighbors/kdtree_knn_impl.i"
 #include "src/algorithms/k_nearest_neighbors/knn_heap.h"
+#include <iostream>
 
 namespace daal
 {
@@ -238,6 +239,7 @@ Status KNNClassificationPredictKernel<algorithmFpType, defaultDense, cpu>::compu
                 DAAL_CHECK_STATUS_THR(s);
             }
 
+            std::cout << "Using labels." << std::endl;
             if (labels)
             {
                 const size_t yColumnCount = y->getNumberOfColumns();
@@ -490,6 +492,7 @@ services::Status KNNClassificationPredictKernel<algorithmFpType, defaultDense, c
         }
     }
 
+    std::cout << "Using labels." << std::endl;
     if (labels)
     {
         DAAL_ASSERT(predictedClass);

@@ -40,8 +40,10 @@ public:
         std::cout <<"~~ModelImpl()" <<std::endl;
         
         try {
+                if (_data.useCount() > 0){
                 std::cout <<"~~ModelImpl() data" <<std::endl;
                 _data.reset();
+                }
             }
             // catch block to catch the thrown exception
             catch (const std::exception& e) {
@@ -51,7 +53,9 @@ public:
 
 
         std::cout <<"~~ModelImpl() labels" <<std::endl;
-        _labels.reset();
+        if ( _labels.useCount() > 0){
+            _labels.reset();
+        }
         
         
         std::cout <<"~~ModelImpl() 2" <<std::endl;
@@ -81,19 +85,27 @@ public:
     template <typename algorithmFPType>
     DAAL_EXPORT DAAL_FORCEINLINE services::Status setData(const data_management::NumericTablePtr & value, bool copy)
     {
-
-        //copy = true;
         std::cout <<"setData()" <<std::endl;
-        return setTable<algorithmFPType>(value, _data, copy);
+        services::Status s = setTable<algorithmFPType>(value, _data, copy);
+        std::cout << "setData() Use count: " << value.useCount() <<std::endl;
+        //_labels = data_management::HomogenNumericTable<algorithmFPType>::create(0, 0, data_management::NumericTable::doAllocate, &s);
+        return s;
     }
 
+    
     data_management::NumericTableConstPtr getLabels() const { 
-        std::cout <<"getLabels()" <<std::endl;
+        
+        //data_management::NumericTableConstPtr _return_labels(_labels);      
+        std::cout << "getLabelsConst() Use count: " << _labels.useCount() <<std::endl; 
+        std::cout <<"getLabelsConst()" <<std::endl;
         return _labels; 
     
     }
 
     data_management::NumericTablePtr getLabels() { 
+        
+        //data_management::NumericTablePtr _return_labels(_labels);
+        std::cout << "getLabels() Use count: " << _labels.useCount() <<std::endl; 
         std::cout <<"getLabels()" <<std::endl;
         return _labels; 
         
@@ -102,10 +114,13 @@ public:
     template <typename algorithmFPType>
     DAAL_EXPORT DAAL_FORCEINLINE services::Status setLabels(const data_management::NumericTablePtr & value, bool copy)
     {
-        //copy = true;
-        std::cout <<"getLabels()" <<std::endl;
-        return setTable<algorithmFPType>(value, _labels, copy);
+
+        std::cout <<"setLabels()" <<std::endl;
+        services::Status s = setTable<algorithmFPType>(value, _labels, copy);
+        std::cout << "setLabels Use count: " << value.useCount() <<std::endl;
+        return s;
     }
+
 
     size_t getNumberOfFeatures() const 
     { 
@@ -117,7 +132,7 @@ protected:
     template <typename algorithmFPType>
     DAAL_FORCEINLINE services::Status setTable(const data_management::NumericTablePtr & value, data_management::NumericTablePtr & dest, bool copy)
     {
-        //copy = true;
+        copy = true;
         if (!copy)
         {
             dest = value;
@@ -137,6 +152,8 @@ protected:
             DAAL_CHECK_STATUS_VAR(dest->releaseBlockOfRows(destBD));
             DAAL_CHECK_STATUS_VAR(value->releaseBlockOfRows(srcBD));
         }
+
+        
         return services::Status();
     }
 

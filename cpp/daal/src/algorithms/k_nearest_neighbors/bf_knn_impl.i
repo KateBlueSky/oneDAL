@@ -35,6 +35,7 @@
 #include "src/algorithms/service_sort.h"
 #include "src/externals/service_math.h"
 #include "src/algorithms/k_nearest_neighbors/knn_heap.h"
+#include <iostream>
 
 namespace daal
 {
@@ -181,6 +182,7 @@ protected:
                                           TlsMem<int, cpu> & tlsIdx, TlsMem<FPType, cpu> & tlsKDistances, TlsMem<int, cpu> & tlsKIndexes,
                                           TlsMem<FPType, cpu> & tlsVoting, size_t nOuterBlocks)
     {
+        std::cout << "computeKNearestBlock" << std::endl;
         const size_t inBlockSize = trainBlockSize;
         const size_t inRows      = nTrain;
         const size_t nInBlocks   = inRows / inBlockSize + (inRows % inBlockSize > 0);
