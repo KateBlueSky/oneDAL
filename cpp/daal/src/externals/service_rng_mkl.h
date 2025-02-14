@@ -27,6 +27,7 @@
 #include <mkl.h>
 #include "src/externals/service_stat_rng_mkl.h"
 #include "src/externals/service_rng_common.h"
+#include <iostream>
 
 // RNGs
 #define __DAAL_BRNG_MT2203                    VSL_BRNG_MT2203
@@ -301,6 +302,7 @@ public:
         daal::services::daal_free((void *)_seed);
         int errcode = 0;
         __DAAL_VSLFN_CALL_NR(vslDeleteStream, (&_stream), errcode);
+        std::cout <<"~BaseRNG() "<< errcode <<std::endl;
     }
 
     int getStateSize() const
@@ -321,7 +323,12 @@ public:
     {
         int errcode = 0;
         __DAAL_VSLFN_CALL_NR(vslDeleteStream, (&_stream), errcode);
-        if (!errcode) __DAAL_VSLFN_CALL_NR(vslLoadStreamM, (&_stream, (const char *)src), errcode);
+        std::cout <<"loadState(const void * src) 1 "<< errcode <<std::endl;
+        if (!errcode) {
+            __DAAL_VSLFN_CALL_NR(vslLoadStreamM, (&_stream, (const char *)src), errcode);
+            
+        }
+        std::cout <<"loadState(const void * src) 2 "<< errcode <<std::endl;
         return errcode;
     }
 
