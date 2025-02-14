@@ -26,6 +26,7 @@
 
 #include "services/daal_defines.h"
 #include <mkl.h>
+#include <iostream>
 
 #define __DAAL_MKLFN_CALL_BLAS(f_name, f_args) f_name f_args;
 
@@ -187,18 +188,23 @@ struct MklBlas<float, cpu>
                       const float * a, const DAAL_INT * lda, const float * y, const DAAL_INT * ldy, const float * beta, float * aty,
                       const DAAL_INT * ldaty)
     {
+        std::cout <<"xgemm() begin" <<std::endl;
         __DAAL_MKLFN_CALL_BLAS(sgemm, (transa, transb, (MKL_INT *)p, (MKL_INT *)ny, (MKL_INT *)n, alpha, a, (MKL_INT *)lda, y, (MKL_INT *)ldy, beta,
                                        aty, (MKL_INT *)ldaty));
+        std::cout <<"xgemm() end" <<std::endl;
     }
 
     static void xxgemm(const char * transa, const char * transb, const DAAL_INT * p, const DAAL_INT * ny, const DAAL_INT * n, const float * alpha,
                        const float * a, const DAAL_INT * lda, const float * y, const DAAL_INT * ldy, const float * beta, float * aty,
                        const DAAL_INT * ldaty)
     {
+        std::cout <<"xxgemm() begin" <<std::endl;
         int old_nthr = mkl_set_num_threads_local(1);
+        std::cout <<"xxgemm() old_nthr " << old_nthr <<std::endl;
         __DAAL_MKLFN_CALL_BLAS(sgemm, (transa, transb, (MKL_INT *)p, (MKL_INT *)ny, (MKL_INT *)n, alpha, a, (MKL_INT *)lda, y, (MKL_INT *)ldy, beta,
                                        aty, (MKL_INT *)ldaty));
         mkl_set_num_threads_local(old_nthr);
+        std::cout <<"xxgemm() end" <<std::endl;
     }
 
     static void xsymm(const char * side, const char * uplo, const DAAL_INT * m, const DAAL_INT * n, const float * alpha, const float * a,
