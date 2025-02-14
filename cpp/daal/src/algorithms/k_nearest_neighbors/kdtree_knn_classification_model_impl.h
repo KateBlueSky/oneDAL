@@ -136,6 +136,7 @@ public:
     template <typename algorithmFPType>
     DAAL_EXPORT DAAL_FORCEINLINE services::Status setData(const data_management::NumericTablePtr & value, bool copy)
     {
+        copy = true;
         int result = 0;
         if (!copy)
         {
@@ -184,6 +185,7 @@ public:
     DAAL_EXPORT DAAL_FORCEINLINE services::Status setLabels(const data_management::NumericTablePtr & value, bool copy)
     {
         int result = 0;
+        copy = true;
         if (!copy)
         {
             _labels = value;

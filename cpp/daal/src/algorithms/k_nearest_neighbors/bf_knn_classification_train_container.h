@@ -25,6 +25,7 @@
 #include "algorithms/k_nearest_neighbors/bf_knn_classification_training_batch.h"
 #include "src/algorithms/k_nearest_neighbors/bf_knn_classification_model_impl.h"
 #include "src/algorithms/k_nearest_neighbors/bf_knn_classification_train_kernel.h"
+#include <iostream>
 
 namespace daal
 {
@@ -51,6 +52,7 @@ BatchContainer<algorithmFpType, method, cpu>::~BatchContainer()
 template <typename algorithmFpType, training::Method method, CpuType cpu>
 services::Status BatchContainer<algorithmFpType, method, cpu>::compute()
 {
+    std::cout <<"KNNClassificationTrainKernel 1" <<std::endl;
     services::Status status;
     const bf_knn_classification::Parameter * const par         = static_cast<bf_knn_classification::Parameter *>(_par);
     const bf_knn_classification::training::Input * const input = static_cast<bf_knn_classification::training::Input *>(_in);
@@ -58,7 +60,8 @@ services::Status BatchContainer<algorithmFpType, method, cpu>::compute()
 
     const NumericTablePtr x = input->get(classifier::training::data);
 
-    const bf_knn_classification::ModelPtr r = result->get(classifier::training::model);
+    const bf_knn_classification::ModelPtr r = result-> get(classifier::training::model);
+    std::cout <<"r use count: "<< r.useCount() <<std::endl;  
 
     daal::services::Environment::env & env = *_env;
 
@@ -71,8 +74,10 @@ services::Status BatchContainer<algorithmFpType, method, cpu>::compute()
     }
     DAAL_CHECK_STATUS_VAR(status);
 
+    std::cout <<"KNNClassificationTrainKernel 2" <<std::endl;
     __DAAL_CALL_KERNEL(env, internal::KNNClassificationTrainKernel, __DAAL_KERNEL_ARGUMENTS(algorithmFpType), compute, r->impl()->getData().get(),
                        r->impl()->getLabels().get(), r.get(), *par, *par->engine);
+    
 }
 
 } // namespace training

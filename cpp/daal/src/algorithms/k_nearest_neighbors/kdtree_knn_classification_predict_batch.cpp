@@ -81,6 +81,7 @@ services::Status Input::check(const daal::algorithms::Parameter * parameter, int
     services::Status s = classifier::prediction::Input::check(parameter, method);
     if (!s) return s;
 
+
     const kdtree_knn_classification::ModelPtr m = get(classifier::prediction::model);
     ErrorCollection errors;
     errors.setCanThrow(false);

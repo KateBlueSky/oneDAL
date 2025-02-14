@@ -37,39 +37,24 @@ public:
     ModelImpl(size_t nFeatures = 0) : _nFeatures(nFeatures) {}
 
     ~ModelImpl() {
-        std::cout <<"~~ModelImpl()" <<std::endl;
-        
-        try {
-                if (_data.useCount() > 0){
-                std::cout <<"~~ModelImpl() data" <<std::endl;
-                _data.reset();
-                }
-            }
-            // catch block to catch the thrown exception
-            catch (const std::exception& e) {
-            // print the exception
-            std::cout << "Exception " << e.what() << std::endl;
-        }
+        _data.reset();
+        _labels.reset();
 
-
-        std::cout <<"~~ModelImpl() labels" <<std::endl;
-        if ( _labels.useCount() > 0){
-            _labels.reset();
-        }
-        
-        
-        std::cout <<"~~ModelImpl() 2" <<std::endl;
+        std::cout <<"~~ModelImpl()" <<std::endl;  
+        std::cout << "getLabelsConst() Use count: " << _labels.useCount() <<std::endl; 
+        std::cout << "ptr1 use count: " << _data.useCount() << std::endl;
     }
 
     data_management::NumericTableConstPtr getData() const { 
-        std::cout <<"getData() data const" <<std::endl;
-        return _data; 
+        data_management::NumericTablePtr _data_temp = _data;    
+        return _data_temp; 
         
     }
 
     data_management::NumericTablePtr getData() { 
-        std::cout <<"getData()" <<std::endl;
-        return _data; 
+        data_management::NumericTablePtr _data_temp = _data;
+         std::cout << "ptr1 use count: " << _data_temp.useCount() << std::endl;
+        return _data_temp; 
     }
 
     template <typename Archive, bool onDeserialize>
@@ -87,27 +72,25 @@ public:
     {
         std::cout <<"setData()" <<std::endl;
         services::Status s = setTable<algorithmFPType>(value, _data, copy);
-        std::cout << "setData() Use count: " << value.useCount() <<std::endl;
-        //_labels = data_management::HomogenNumericTable<algorithmFPType>::create(0, 0, data_management::NumericTable::doAllocate, &s);
         return s;
     }
 
     
     data_management::NumericTableConstPtr getLabels() const { 
         
-        //data_management::NumericTableConstPtr _return_labels(_labels);      
+        data_management::NumericTableConstPtr _return_labels = _labels;      
         std::cout << "getLabelsConst() Use count: " << _labels.useCount() <<std::endl; 
         std::cout <<"getLabelsConst()" <<std::endl;
-        return _labels; 
+        return _return_labels; 
     
     }
 
     data_management::NumericTablePtr getLabels() { 
         
-        //data_management::NumericTablePtr _return_labels(_labels);
+        data_management::NumericTablePtr _return_labels = _labels;
         std::cout << "getLabels() Use count: " << _labels.useCount() <<std::endl; 
         std::cout <<"getLabels()" <<std::endl;
-        return _labels; 
+        return _return_labels; 
         
     }
 

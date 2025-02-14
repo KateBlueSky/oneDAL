@@ -20,6 +20,13 @@
 #include "services/error_indexes.h"
 #include <iostream>
 
+#define __KATE_DAAL_CALL_KERNEL(env, KernelClass, templateArguments, method, ...)            \
+    {                                                                                   \
+        return ((KernelClass<templateArguments, cpu> *)(_kernel))->method(__VA_ARGS__); \
+    }
+
+
+
 namespace daal
 {
 namespace algorithms
@@ -64,8 +71,11 @@ services::Status BatchContainer<algorithmFpType, method, cpu>::compute()
 
     std::cout <<"Compute()" <<std::endl;
     
-    __DAAL_CALL_KERNEL(env, internal::KNNClassificationPredictKernel, __DAAL_KERNEL_ARGUMENTS(algorithmFpType), compute, a.get(), m.get(),
+    const data_management::NumericTablePtr label_test;
+    __KATE_DAAL_CALL_KERNEL(env, internal::KNNClassificationPredictKernel, __DAAL_KERNEL_ARGUMENTS(algorithmFpType), compute, a.get(), m.get(),
                      label.get(), indices.get(), distances.get(), &kernelPar);
+
+    
 }
 
 } // namespace prediction

@@ -124,6 +124,7 @@ Status KNNClassificationPredictKernel<algorithmFpType, defaultDense, cpu>::compu
 {
     Status status;
 
+    std::cout << "Compute 0." << std::endl;
     auto oldThreads = services::Environment::getInstance()->getNumberOfThreads();
     services::Environment::getInstance()->setNumberOfThreads(1);
     typedef GlobalNeighbors<algorithmFpType, cpu> Neighbors;
@@ -131,12 +132,13 @@ Status KNNClassificationPredictKernel<algorithmFpType, defaultDense, cpu>::compu
     typedef kdtree_knn_classification::internal::Stack<SearchNode<algorithmFpType>, cpu> SearchStack;
     typedef daal::services::internal::MaxVal<algorithmFpType> MaxVal;
     typedef daal::internal::MathInst<algorithmFpType, cpu> Math;
+    std::cout << "Compute 1." << std::endl;
 
     size_t k;
     size_t nClasses;
     VoteWeights voteWeights       = voteUniform;
     DAAL_UINT64 resultsToEvaluate = classifier::computeClassLabels;
-
+    std::cout << "Compute 2." << std::endl;
     const auto par3 = dynamic_cast<const kdtree_knn_classification::interface3::Parameter *>(par);
     if (par3)
     {
@@ -146,6 +148,7 @@ Status KNNClassificationPredictKernel<algorithmFpType, defaultDense, cpu>::compu
         nClasses          = par3->nClasses;
     }
 
+    std::cout << "Compute 3." << std::endl;
     if (par3 == NULL) return Status(ErrorNullParameterNotSupported);
 
     const Model * const model    = static_cast<const Model *>(m);
@@ -158,6 +161,7 @@ Status KNNClassificationPredictKernel<algorithmFpType, defaultDense, cpu>::compu
         labels = model->impl()->getLabels().get();
     }
 
+    std::cout << "Compute 4." << std::endl;
     const NumericTable * const modelIndices = model->impl()->getIndices().get();
 
     size_t iSize = 1;
@@ -167,6 +171,7 @@ Status KNNClassificationPredictKernel<algorithmFpType, defaultDense, cpu>::compu
     }
     const size_t heapSize = (iSize / 16 + 1) * 16;
 
+    std::cout << "Compute 5." << std::endl;
     const size_t xRowCount        = x->getNumberOfRows();
     const algorithmFpType base    = 2.0;
     const size_t expectedMaxDepth = (Math::sLog(xRowCount) / Math::sLog(base) + 1) * __KDTREE_DEPTH_MULTIPLICATION_FACTOR;
@@ -176,6 +181,7 @@ Status KNNClassificationPredictKernel<algorithmFpType, defaultDense, cpu>::compu
         MaxHeap heap;
         SearchStack stack;
     };
+    std::cout << "Compute 6." << std::endl;
     daal::tls<Local *> localTLS([&]() -> Local * {
         Local * const ptr = service_scalable_calloc<Local, cpu>(1);
         if (ptr)
@@ -198,6 +204,7 @@ Status KNNClassificationPredictKernel<algorithmFpType, defaultDense, cpu>::compu
         {
             status.add(services::ErrorMemoryAllocationFailed);
         }
+        std::cout << "Compute 7." << std::endl;
         return ptr;
     });
 
@@ -214,8 +221,11 @@ Status KNNClassificationPredictKernel<algorithmFpType, defaultDense, cpu>::compu
 
     daal::threader_for(blockCount, blockCount, [&](int iBlock) {
         Local * const local = localTLS.local();
+        
+        std::cout << "Compute 8." << std::endl;
         if (local)
         {
+            std::cout << "Compute 9." << std::endl;
             services::Status s;
 
             const size_t first = iBlock * rowsPerBlock;
@@ -242,6 +252,7 @@ Status KNNClassificationPredictKernel<algorithmFpType, defaultDense, cpu>::compu
             std::cout << "Using labels." << std::endl;
             if (labels)
             {
+                std::cout << "Compute 10." << std::endl;
                 const size_t yColumnCount = y->getNumberOfColumns();
                 data_management::BlockDescriptor<algorithmFpType> yBD;
                 y->getBlockOfRows(first, last - first, writeOnly, yBD);
@@ -260,6 +271,7 @@ Status KNNClassificationPredictKernel<algorithmFpType, defaultDense, cpu>::compu
             }
             else
             {
+                std::cout << "Compute 11." << std::endl;
                 for (size_t i = 0; i < last - first; ++i)
                 {
                     findNearestNeighbors(&dx[i * xColumnCount], local->heap, local->stack, k, radius, kdTreeTable, rootTreeNodeIndex, data,
@@ -444,6 +456,7 @@ services::Status KNNClassificationPredictKernel<algorithmFpType, defaultDense, c
 {
     typedef daal::internal::MathInst<algorithmFpType, cpu> Math;
 
+   
     const size_t heapSize = heap.size();
     if (heapSize < 1) return services::Status();
 
