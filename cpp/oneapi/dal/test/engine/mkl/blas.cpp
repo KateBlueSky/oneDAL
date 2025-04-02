@@ -16,6 +16,8 @@
 
 #include "oneapi/dal/test/engine/mkl/blas.hpp"
 #include <type_traits>
+#include <iostream>
+#include <chrono>
 
 #ifdef ONEDAL_REF
 #if (defined(DAAL_REF) && (INTPTR_MAX == INT64_MAX))
@@ -83,12 +85,19 @@ void gemm(GEMM_PARAMETERS_C(Float)) {
     const GEMM_INT _lda = static_cast<GEMM_INT>(lda);
     const GEMM_INT _ldb = static_cast<GEMM_INT>(ldb);
     const GEMM_INT _ldc = static_cast<GEMM_INT>(ldc);
+
+    auto start = std::chrono::high_resolution_clock::now();
+
     if constexpr (std::is_same_v<Float, float>) {
         SGEMM(&ta, &tb, &_m, &_n, &_k, &alpha, a, &_lda, b, &_ldb, &beta, c, &_ldc);
     }
     else {
         DGEMM(&ta, &tb, &_m, &_n, &_k, &alpha, a, &_lda, b, &_ldb, &beta, c, &_ldc);
     }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "GEMM execution time: " << elapsed.count() << " seconds" << std::endl;
 }
 
 #define INSTANTIATE_GEMM(Float) template void gemm<Float>(GEMM_PARAMETERS_C(Float));
