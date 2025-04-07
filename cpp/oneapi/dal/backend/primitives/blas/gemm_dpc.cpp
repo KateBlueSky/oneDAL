@@ -17,11 +17,22 @@
 #include "oneapi/dal/detail/profiler.hpp"
 #include "oneapi/dal/backend/primitives/blas/gemm.hpp"
 #include "oneapi/dal/backend/primitives/blas/misc.hpp"
+#include <iostream>
 
+#define USE_ONEDNN
+
+#ifdef USE_ONEDNN
+#include <dnnl.hpp>
+using namespace dnnl;
+#else
 #include <oneapi/mkl.hpp>
+#endif
+
 
 namespace oneapi::dal::backend::primitives {
 
+
+#ifdef USE_ONEDNN
 template <typename Float, ndorder ao, ndorder bo, ndorder co>
 sycl::event gemm(sycl::queue& queue,
                  const ndview<Float, 2, ao>& a,
@@ -30,6 +41,65 @@ sycl::event gemm(sycl::queue& queue,
                  Float alpha,
                  Float beta,
                  const event_vector& deps) {
+    
+    
+    std::cout << "Using oneDNN gemm" << std::endl;
+    ONEDAL_PROFILER_TASK(blas.gemm, queue);
+
+    ONEDAL_ASSERT(a.get_dimension(0) == c.get_dimension(0));
+    ONEDAL_ASSERT(a.get_dimension(1) == b.get_dimension(0));
+    ONEDAL_ASSERT(b.get_dimension(1) == c.get_dimension(1));
+    ONEDAL_ASSERT(c.has_mutable_data());
+
+
+    // Create a oneDNN engine and stream
+    engine eng(engine::kind::cpu, 0);
+    stream s(eng);
+
+    // Define memory dimensions
+    memory::dims a_dims = { a.get_dimension(0), a.get_dimension(1) };
+    memory::dims b_dims = { b.get_dimension(0), b.get_dimension(1) };
+    memory::dims c_dims = { c.get_dimension(0), c.get_dimension(1) };
+
+    // Create memory descriptors
+    auto a_md = memory::desc(a_dims, memory::data_type::f32, memory::format_tag::ab);
+    auto b_md = memory::desc(b_dims, memory::data_type::f32, memory::format_tag::ab);
+    auto c_md = memory::desc(c_dims, memory::data_type::f32, memory::format_tag::ab);
+
+    // Create memory objects
+    auto a_mem = memory(a_md, eng, (void*)a.get_data());
+    auto b_mem = memory(b_md, eng, (void*)b.get_data());
+    auto c_mem = memory(c_md, eng, (void*)c.get_mutable_data());
+
+    // Create a matrix multiplication primitive descriptor
+    auto matmul_pd = matmul::primitive_desc(eng, a_md, b_md, c_md);
+
+    // Create a matrix multiplication primitive
+    auto matmul_prim = matmul(matmul_pd);
+
+    // Execute the matrix multiplication
+    matmul_prim.execute(s, {
+        {DNNL_ARG_SRC, a_mem},
+        {DNNL_ARG_WEIGHTS, b_mem},
+        {DNNL_ARG_DST, c_mem}
+    });
+    s.wait();
+
+    // Return a completed event
+    return sycl::event{};
+}
+
+#else
+template <typename Float, ndorder ao, ndorder bo, ndorder co>
+sycl::event gemm(sycl::queue& queue,
+                 const ndview<Float, 2, ao>& a,
+                 const ndview<Float, 2, bo>& b,
+                 ndview<Float, 2, co>& c,
+                 Float alpha,
+                 Float beta,
+                 const event_vector& deps) {
+
+    std::cout << "Using oneMKL gemm" << std::endl;
     ONEDAL_PROFILER_TASK(blas.gemm, queue);
 
     ONEDAL_ASSERT(a.get_dimension(0) == c.get_dimension(0));
@@ -73,6 +143,7 @@ sycl::event gemm(sycl::queue& queue,
                                deps);
     }
 }
+#endif
 
 #define INSTANTIATE(F, ao, bo, co)                                                    \
     template ONEDAL_EXPORT sycl::event gemm<F, ao, bo, co>(sycl::queue & queue,       \
