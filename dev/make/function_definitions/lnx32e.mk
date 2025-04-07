@@ -24,13 +24,13 @@ include dev/make/function_definitions/32e.mk
 
 # Used as $(eval $(call set_daal_rt_deps))
 define set_daal_rt_deps
-  $$(eval daaldep.lnx32e.rt.thr := -L$$(TBBDIR.soia.lnx) -ltbb -ltbbmalloc \
+  $$(eval daaldep.lnx32e.rt.thr := -L$$(TBBDIR.soia.lnx) -ltbb -ltbbmalloc -ldnnl \
           -lpthread $$(daaldep.lnx32e.rt.$$(COMPILER)) \
           $$(if $$(COV.libia),$$(COV.libia)/libcov.a))
-  $$(eval daaldep.lnx32e.rt.seq := -lpthread $$(daaldep.lnx32e.rt.$$(COMPILER)) \
+  $$(eval daaldep.lnx32e.rt.seq := -ldnnl -lpthread $$(daaldep.lnx32e.rt.$$(COMPILER)) \
 	  	  $$(if $$(RNG_OPENRNG), $$(daaldep.rng_backend.lib)) \
           $$(if $$(COV.libia),$$(COV.libia)/libcov.a))
-  $$(eval daaldep.lnx32e.rt.dpc := -lpthread -lOpenCL \
+  $$(eval daaldep.lnx32e.rt.dpc := -ldnnl -lpthread -lOpenCL \
           $$(if $$(COV.libia),$$(COV.libia)/libcov.a))
   $$(eval daaldep.lnx32e.threxport := export_lnx32e.$$(BACKEND_CONFIG).def)
 
