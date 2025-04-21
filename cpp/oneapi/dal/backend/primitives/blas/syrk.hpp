@@ -23,9 +23,9 @@ namespace oneapi::dal::backend::primitives {
 
 #ifdef ONEDAL_DATA_PARALLEL
 
-namespace mkl = oneapi::mkl;
+//namespace mkl = oneapi::mkl;
 
-template <mkl::uplo ul, typename Float, ndorder ao>
+template <oneapi::math::uplo ul, typename Float, ndorder ao>
 sycl::event syrk(sycl::queue& queue,
                  const ndview<Float, 2, ao>& a,
                  ndview<Float, 2>& c,
@@ -33,7 +33,7 @@ sycl::event syrk(sycl::queue& queue,
                  Float beta = Float(0),
                  const event_vector& deps = {});
 
-template <mkl::uplo ul, typename Float, ndorder ao>
+template <oneapi::math::uplo ul, typename Float, ndorder ao>
 inline sycl::event syrk(sycl::queue& queue,
                         const ndview<Float, 2, ao>& a,
                         ndview<Float, 2>& c,

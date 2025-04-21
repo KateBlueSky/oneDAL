@@ -18,14 +18,16 @@
 #include "oneapi/dal/backend/primitives/lapack/gesvd.hpp"
 #include "oneapi/dal/backend/primitives/blas/misc.hpp"
 #include "oneapi/dal/backend/primitives/ndarray.hpp"
-#include <oneapi/mkl.hpp>
+
+// Replace MKL with oneMATH
+#include <oneapi/math/lapack.hpp>
 
 namespace oneapi::dal::backend::primitives {
 
 template <typename Float>
 static sycl::event gesvd_wrapper(sycl::queue& queue,
-                                 mkl::jobsvd jobu,
-                                 mkl::jobsvd jobvt,
+                                 onemath::jobsvd jobu,
+                                 onemath::jobsvd jobvt,
                                  std::int64_t row_count,
                                  std::int64_t column_count,
                                  Float* data_ptr,
@@ -44,24 +46,25 @@ static sycl::event gesvd_wrapper(sycl::queue& queue,
     ONEDAL_ASSERT(ldu > 0);
     ONEDAL_ASSERT(ldvt > 0);
     ONEDAL_ASSERT(scratchpad_size > 0);
-    return mkl::lapack::gesvd(queue,
-                              jobu,
-                              jobvt,
-                              row_count,
-                              column_count,
-                              data_ptr,
-                              lda,
-                              S_ptr,
-                              U_ptr,
-                              ldu,
-                              V_T_ptr,
-                              ldvt,
-                              scratchpad_ptr,
-                              scratchpad_size,
-                              deps);
+
+    return onemath::lapack::gesvd(queue,
+                                  jobu,
+                                  jobvt,
+                                  row_count,
+                                  column_count,
+                                  data_ptr,
+                                  lda,
+                                  S_ptr,
+                                  U_ptr,
+                                  ldu,
+                                  V_T_ptr,
+                                  ldvt,
+                                  scratchpad_ptr,
+                                  scratchpad_size,
+                                  deps);
 }
 
-template <mkl::jobsvd jobu, mkl::jobsvd jobvt, typename Float>
+template <onemath::jobsvd jobu, onemath::jobsvd jobvt, typename Float>
 sycl::event gesvd(sycl::queue& queue,
                   std::int64_t row_count,
                   std::int64_t column_count,
@@ -78,17 +81,18 @@ sycl::event gesvd(sycl::queue& queue,
     constexpr auto job_u = ident_jobsvd(jobu);
     constexpr auto job_vt = ident_jobsvd(jobvt);
 
-    const auto scratchpad_size = mkl::lapack::gesvd_scratchpad_size<Float>(queue,
-                                                                           job_u,
-                                                                           job_vt,
-                                                                           row_count,
-                                                                           column_count,
-                                                                           lda,
-                                                                           ldu,
-                                                                           ldvt);
+    const auto scratchpad_size = onemath::lapack::gesvd_scratchpad_size<Float>(queue,
+                                                                               job_u,
+                                                                               job_vt,
+                                                                               row_count,
+                                                                               column_count,
+                                                                               lda,
+                                                                               ldu,
+                                                                               ldvt);
     auto scratchpad =
         ndarray<Float, 1>::empty(queue, { scratchpad_size }, sycl::usm::alloc::device);
     auto scratchpad_ptr = scratchpad.get_mutable_data();
+
     return gesvd_wrapper(queue,
                          job_u,
                          job_vt,
@@ -123,14 +127,15 @@ sycl::event gesvd(sycl::queue& queue,
     INSTANTIATE(jobu, jobvt, float)    \
     INSTANTIATE(jobu, jobvt, double)
 
-#define INSTANTIATE_JOB(jobvt)                        \
-    INSTANTIATE_FLOAT(mkl::jobsvd::vectors, jobvt)    \
-    INSTANTIATE_FLOAT(mkl::jobsvd::somevec, jobvt)    \
-    INSTANTIATE_FLOAT(mkl::jobsvd::vectorsina, jobvt) \
-    INSTANTIATE_FLOAT(mkl::jobsvd::novec, jobvt)
+#define INSTANTIATE_JOB(jobvt)                            \
+    INSTANTIATE_FLOAT(onemath::jobsvd::vectors, jobvt)    \
+    INSTANTIATE_FLOAT(onemath::jobsvd::somevec, jobvt)    \
+    INSTANTIATE_FLOAT(onemath::jobsvd::vectorsina, jobvt) \
+    INSTANTIATE_FLOAT(onemath::jobsvd::novec, jobvt)
 
-INSTANTIATE_JOB(mkl::jobsvd::vectors)
-INSTANTIATE_JOB(mkl::jobsvd::somevec)
-INSTANTIATE_JOB(mkl::jobsvd::novec)
+INSTANTIATE_JOB(onemath::jobsvd::vectors)
+INSTANTIATE_JOB(onemath::jobsvd::somevec)
+INSTANTIATE_JOB(onemath::jobsvd::novec)
 
 } // namespace oneapi::dal::backend::primitives
+// namespace oneapi::dal::backend::primitives

@@ -17,7 +17,8 @@
 #include "oneapi/dal/backend/primitives/rng/device_engine.hpp"
 #include "oneapi/dal/backend/primitives/ndarray.hpp"
 
-#include <oneapi/mkl.hpp>
+// Swap oneMKL RNG with oneMATH RNG
+#include <oneapi/math/rng.hpp>
 
 namespace oneapi::dal::backend::primitives {
 
@@ -34,42 +35,33 @@ sycl::event generate_rng(Distribution& distr,
     if (engine_type == engine_type_internal::philox4x32x10) {
         auto& device_engine =
             *(static_cast<gen_philox*>(engine_.get_device_engine_base_ptr().get()))->get();
-        return oneapi::mkl::rng::generate(distr, device_engine, count, dst, deps);
+        return onemath::rng::generate(distr, device_engine, count, dst, deps);
     }
     else if (engine_type == engine_type_internal::mt19937) {
         auto& device_engine =
             *(static_cast<gen_mt19937*>(engine_.get_device_engine_base_ptr().get()))->get();
-        return oneapi::mkl::rng::generate(distr, device_engine, count, dst, deps);
+        return onemath::rng::generate(distr, device_engine, count, dst, deps);
     }
     else if (engine_type == engine_type_internal::mrg32k3a) {
         auto& device_engine =
             *(static_cast<gen_mrg32k*>(engine_.get_device_engine_base_ptr().get()))->get();
-        return oneapi::mkl::rng::generate(distr, device_engine, count, dst, deps);
+        return onemath::rng::generate(distr, device_engine, count, dst, deps);
     }
     else if (engine_type == engine_type_internal::mcg59) {
         auto& device_engine =
             *(static_cast<gen_mcg59*>(engine_.get_device_engine_base_ptr().get()))->get();
-        return oneapi::mkl::rng::generate(distr, device_engine, count, dst, deps);
+        return onemath::rng::generate(distr, device_engine, count, dst, deps);
     }
     else if (engine_type == engine_type_internal::mt2203) {
         auto& device_engine =
             *(static_cast<gen_mt2203*>(engine_.get_device_engine_base_ptr().get()))->get();
-        return oneapi::mkl::rng::generate(distr, device_engine, count, dst, deps);
+        return onemath::rng::generate(distr, device_engine, count, dst, deps);
     }
     else {
         throw std::runtime_error("Unsupported engine type in generate_rng");
     }
 }
 
-/// Generates uniformly distributed random numbers on the GPU.
-/// @tparam Type The data type of the generated numbers.
-/// @param[in] queue The SYCL queue for device execution.
-/// @param[in] count The number of random numbers to generate.
-/// @param[out] dst Pointer to the output buffer.
-/// @param[in] engine_ Reference to the device engine.
-/// @param[in] a The lower bound of the uniform distribution.
-/// @param[in] b The upper bound of the uniform distribution.
-/// @param[in] deps Dependencies for the SYCL event.
 template <typename Type>
 sycl::event uniform(sycl::queue& queue,
                     std::int64_t count,
@@ -81,22 +73,11 @@ sycl::event uniform(sycl::queue& queue,
     if (sycl::get_pointer_type(dst, engine_.get_queue().get_context()) == sycl::usm::alloc::host) {
         throw domain_error(dal::detail::error_messages::unsupported_data_type());
     }
-    oneapi::mkl::rng::uniform<Type> distr(a, b);
+    onemath::rng::uniform<Type> distr(a, b);
     engine_.skip_ahead_cpu(count);
-    auto event = generate_rng(distr, engine_, count, dst, deps);
-    return event;
+    return generate_rng(distr, engine_, count, dst, deps);
 }
 
-/// Generates a random permutation of elements without replacement on the GPU.
-/// @tparam Type The data type of the elements.
-/// @param[in] queue The SYCL queue for device execution.
-/// @param[in] count The number of elements to generate.
-/// @param[out] dst Pointer to the output buffer.
-/// @param[out] buffer Temporary buffer used for computations.
-/// @param[in] engine_ Reference to the device engine.
-/// @param[in] a The lower bound of the range.
-/// @param[in] b The upper bound of the range.
-/// @param[in] deps Dependencies for the SYCL event.
 template <typename Type>
 sycl::event uniform_without_replacement(sycl::queue& queue,
                                         std::int64_t count,
@@ -112,19 +93,11 @@ sycl::event uniform_without_replacement(sycl::queue& queue,
     void* state = engine_.get_host_engine_state();
     engine_.skip_ahead_gpu(count);
     uniform_dispatcher::uniform_without_replacement_by_cpu<Type>(count, dst, state, a, b);
-    auto event = queue.submit([&](sycl::handler& h) {
+    return queue.submit([&](sycl::handler& h) {
         h.depends_on(deps);
     });
-    return event;
 }
 
-/// Shuffles an array using random swaps on the GPU.
-/// @tparam Type The data type of the array elements.
-/// @param[in] queue The SYCL queue for device execution.
-/// @param[in] count The number of elements to shuffle.
-/// @param[in, out] dst Pointer to the array to be shuffled.
-/// @param[in] engine_ Reference to the device engine.
-/// @param[in] deps Dependencies for the SYCL event.
 template <typename Type>
 sycl::event shuffle(sycl::queue& queue,
                     std::int64_t count,
@@ -143,20 +116,11 @@ sycl::event shuffle(sycl::queue& queue,
         uniform_dispatcher::uniform_by_cpu<Type>(2, idx, state, 0, count);
         std::swap(dst[idx[0]], dst[idx[1]]);
     }
-    auto event = queue.submit([&](sycl::handler& h) {
+    return queue.submit([&](sycl::handler& h) {
         h.depends_on(deps);
     });
-    return event;
 }
 
-/// Partially shuffles the first `top` elements of an array using the Fisher-Yates algorithm.
-/// @tparam Type The data type of the array elements.
-/// @param[in] queue_ The SYCL queue for device execution.
-/// @param[in, out] result_array The array to be partially shuffled.
-/// @param[in] top The number of elements to shuffle.
-/// @param[in] seed The seed for the engine.
-/// @param[in] method The rng engine type. Defaults to `mt19937`.
-/// @param[in] deps Dependencies for the SYCL event.
 template <typename Type>
 sycl::event partial_fisher_yates_shuffle(sycl::queue& queue_,
                                          ndview<Type, 1>& result_array,
@@ -187,10 +151,9 @@ sycl::event partial_fisher_yates_shuffle(sycl::queue& queue_,
         k++;
     }
     ONEDAL_ASSERT(k == count);
-    auto event = queue_.submit([&](sycl::handler& h) {
+    return queue_.submit([&](sycl::handler& h) {
         h.depends_on(deps);
     });
-    return event;
 }
 
 #define INSTANTIATE_UNIFORM(F)                                         \
@@ -240,3 +203,4 @@ INSTANTIATE_PARTIAL_SHUFFLE(std::int32_t)
 INSTANTIATE_PARTIAL_SHUFFLE(std::int64_t)
 
 } // namespace oneapi::dal::backend::primitives
+// namespace oneapi::dal::backend::primitives

@@ -18,23 +18,24 @@
 
 #include "oneapi/dal/backend/primitives/ndarray.hpp"
 
-#include <oneapi/mkl.hpp>
+// Swap oneMKL for oneMATH
+#include <oneapi/math/lapack.hpp>
 
 namespace oneapi::dal::backend::primitives {
 
-namespace mkl = oneapi::mkl;
-
-inline constexpr mkl::job ident_job(mkl::job order) {
-    constexpr auto novec = mkl::job::novec;
-    constexpr auto vec = mkl::job::vec;
+/// Identity mapping for job (used in some LAPACK routines)
+inline constexpr onemath::job ident_job(onemath::job order) {
+    constexpr auto novec = onemath::job::novec;
+    constexpr auto vec = onemath::job::vec;
     return (order == novec) ? novec : vec;
 }
 
-inline constexpr mkl::jobsvd ident_jobsvd(mkl::jobsvd order) {
-    constexpr auto vectors = mkl::jobsvd::vectors;
-    constexpr auto somevec = mkl::jobsvd::somevec;
-    constexpr auto vectorsina = mkl::jobsvd::vectorsina;
-    constexpr auto novec = mkl::jobsvd::novec;
+/// Identity mapping for jobsvd (handles all enum options)
+inline constexpr onemath::jobsvd ident_jobsvd(onemath::jobsvd order) {
+    constexpr auto vectors = onemath::jobsvd::vectors;
+    constexpr auto somevec = onemath::jobsvd::somevec;
+    constexpr auto vectorsina = onemath::jobsvd::vectorsina;
+    constexpr auto novec = onemath::jobsvd::novec;
 
     switch (order) {
         case vectors: return vectors;
@@ -45,3 +46,4 @@ inline constexpr mkl::jobsvd ident_jobsvd(mkl::jobsvd order) {
 }
 
 } // namespace oneapi::dal::backend::primitives
+ // namespace oneapi::dal::backend::primitives

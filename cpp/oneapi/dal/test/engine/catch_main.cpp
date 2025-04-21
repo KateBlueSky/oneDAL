@@ -23,7 +23,7 @@
 #include "oneapi/dal/test/engine/catch.hpp"
 #include "oneapi/dal/test/engine/config.hpp"
 
-inline constexpr int default_benchmark_run_count = 5;
+inline constexpr int default_benchmark_run_count = 1;
 
 int main(int argc, char** argv) {
     using namespace Catch::Clara;

@@ -142,5 +142,6 @@ cc_library(
         ":headers",
         "@mkl//:mkl_dpc",
         ":parameters_dynamic_dpc",
+        "@oneMath//:onemath",
     ],
 )

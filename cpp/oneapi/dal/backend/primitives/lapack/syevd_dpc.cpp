@@ -18,14 +18,16 @@
 #include "oneapi/dal/backend/primitives/lapack/syevd.hpp"
 #include "oneapi/dal/backend/primitives/blas/misc.hpp"
 #include "oneapi/dal/backend/primitives/ndarray.hpp"
-#include <oneapi/mkl.hpp>
+
+// Swap oneMKL with oneMATH
+#include <oneapi/math/lapack.hpp>
 
 namespace oneapi::dal::backend::primitives {
 
 template <typename Float>
 static sycl::event syevd_wrapper(sycl::queue& queue,
-                                 mkl::job jobz,
-                                 mkl::uplo uplo,
+                                 onemath::job jobz,
+                                 onemath::uplo uplo,
                                  std::int64_t column_count,
                                  Float* data_ptr,
                                  std::int64_t lda,
@@ -35,19 +37,19 @@ static sycl::event syevd_wrapper(sycl::queue& queue,
                                  const event_vector& deps) {
     ONEDAL_ASSERT(lda >= column_count);
 
-    return mkl::lapack::syevd(queue,
-                              jobz,
-                              uplo,
-                              column_count,
-                              data_ptr,
-                              lda,
-                              eigenvalues,
-                              scratchpad,
-                              scratchpad_size,
-                              deps);
+    return onemath::lapack::syevd(queue,
+                                   jobz,
+                                   uplo,
+                                   column_count,
+                                   data_ptr,
+                                   lda,
+                                   eigenvalues,
+                                   scratchpad,
+                                   scratchpad_size,
+                                   deps);
 }
 
-template <mkl::job jobz, mkl::uplo uplo, typename Float>
+template <onemath::job jobz, onemath::uplo uplo, typename Float>
 sycl::event syevd(sycl::queue& queue,
                   std::int64_t column_count,
                   ndview<Float, 2>& a,
@@ -58,7 +60,7 @@ sycl::event syevd(sycl::queue& queue,
     constexpr auto ul = ident_uplo(uplo);
 
     const auto scratchpad_size =
-        mkl::lapack::syevd_scratchpad_size<Float>(queue, jobz, uplo, column_count, lda);
+        onemath::lapack::syevd_scratchpad_size<Float>(queue, job, ul, column_count, lda);
     auto scratchpad =
         ndarray<Float, 1>::empty(queue, { scratchpad_size }, sycl::usm::alloc::device);
 
@@ -86,11 +88,12 @@ sycl::event syevd(sycl::queue& queue,
     INSTANTIATE(jobz, uplo, float)    \
     INSTANTIATE(jobz, uplo, double)
 
-#define INSTANTIATE_JOB(uplo)                \
-    INSTANTIATE_FLOAT(mkl::job::novec, uplo) \
-    INSTANTIATE_FLOAT(mkl::job::vec, uplo)
+#define INSTANTIATE_JOB(uplo)                    \
+    INSTANTIATE_FLOAT(onemath::job::novec, uplo) \
+    INSTANTIATE_FLOAT(onemath::job::vec, uplo)
 
-INSTANTIATE_JOB(mkl::uplo::upper)
-INSTANTIATE_JOB(mkl::uplo::lower)
+INSTANTIATE_JOB(onemath::uplo::upper)
+INSTANTIATE_JOB(onemath::uplo::lower)
 
 } // namespace oneapi::dal::backend::primitives
+ // namespace oneapi::dal::backend::primitives

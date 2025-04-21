@@ -21,15 +21,15 @@ namespace oneapi::dal::detail {
 namespace v1 {
 
 #ifdef ONEDAL_DATA_PARALLEL
-
+/*
 sparse_matrix_handle_impl::sparse_matrix_handle_impl(sycl::queue& queue) : queue_(queue) {
-    mkl::sparse::init_matrix_handle(&handle_);
+    oneapi::math::sparse::init_dense_matrix(queue, &handle_, handle_.num_rows, handle_.num_cols, handle_.ld, handle_.dense_layout, handle_.val);
 }
 
 sparse_matrix_handle_impl::~sparse_matrix_handle_impl() {
-    mkl::sparse::release_matrix_handle(queue_, &handle_, {}).wait();
+    oneapi::math::sparse::release_dense_matrix(queue_, &handle_, {}).wait();
 }
-
+*/
 #endif // ONEDAL_DATA_PARALLEL
 
 } // namespace v1

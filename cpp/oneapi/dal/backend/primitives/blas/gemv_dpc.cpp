@@ -18,7 +18,8 @@
 #include "oneapi/dal/backend/primitives/blas/gemv.hpp"
 #include "oneapi/dal/backend/primitives/blas/misc.hpp"
 
-#include <oneapi/mkl.hpp>
+// Swap oneMKL for oneMATH
+#include "oneapi/math.hpp"
 
 namespace oneapi::dal::backend::primitives {
 
@@ -41,39 +42,37 @@ sycl::event gemv(sycl::queue& queue,
     ONEDAL_ASSERT(y.get_count() == m);
     ONEDAL_ASSERT(x.get_count() == n);
 
-    // The order of matrix should be column major before it is transfered to gemv
-
     if constexpr (ao == ndorder::c) {
         ONEDAL_ASSERT(lda >= n);
-        return mkl::blas::gemv(queue,
-                               mkl::transpose::trans,
-                               n,
-                               m,
-                               alpha,
-                               a.get_data(),
-                               lda,
-                               x.get_data(),
-                               std::int64_t(1),
-                               beta,
-                               y.get_mutable_data(),
-                               std::int64_t(1),
-                               deps);
+        return oneapi::math::blas::column_major::gemv(queue,
+                                   oneapi::math::transpose::trans,
+                                   n,
+                                   m,
+                                   alpha,
+                                   a.get_data(),
+                                   lda,
+                                   x.get_data(),
+                                   std::int64_t(1),
+                                   beta,
+                                   y.get_mutable_data(),
+                                   std::int64_t(1),
+                                   deps);
     }
     else {
         ONEDAL_ASSERT(lda >= m);
-        return mkl::blas::gemv(queue,
-                               mkl::transpose::nontrans,
-                               m,
-                               n,
-                               alpha,
-                               a.get_data(),
-                               lda,
-                               x.get_data(),
-                               std::int64_t(1),
-                               beta,
-                               y.get_mutable_data(),
-                               std::int64_t(1),
-                               deps);
+        return oneapi::math::blas::column_major::gemv(queue,
+                                   oneapi::math::transpose::nontrans,
+                                   m,
+                                   n,
+                                   alpha,
+                                   a.get_data(),
+                                   lda,
+                                   x.get_data(),
+                                   std::int64_t(1),
+                                   beta,
+                                   y.get_mutable_data(),
+                                   std::int64_t(1),
+                                   deps);
     }
 }
 
@@ -94,3 +93,4 @@ INSTANTIATE_FLOAT(ndorder::c);
 INSTANTIATE_FLOAT(ndorder::f);
 
 } // namespace oneapi::dal::backend::primitives
+

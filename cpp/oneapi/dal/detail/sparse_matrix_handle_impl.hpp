@@ -18,13 +18,15 @@
 
 #ifdef ONEDAL_DATA_PARALLEL
 
-#include <oneapi/mkl.hpp>
+/*
+#include "oneapi/math.hpp"
+
 
 namespace oneapi::dal::detail {
 
 namespace v1 {
 
-namespace mkl = oneapi::mkl;
+//namespace mkl = oneapi::mkl;
 
 /// Class that hides the implementation details of the `backend::primitives::sparse_matrix_handle` class
 class sparse_matrix_handle_impl {
@@ -37,15 +39,15 @@ public:
 
     sparse_matrix_handle_impl& operator=(sparse_matrix_handle_impl& other) = delete;
 
-    inline mkl::sparse::matrix_handle_t& get() {
+    inline oneapi::math::sparse::matrix_handle_t& get() {
         return handle_;
     }
-    inline const mkl::sparse::matrix_handle_t& get() const {
+    inline const oneapi::math::sparse::matrix_handle_t& get() const {
         return handle_;
     }
 
 private:
-    mkl::sparse::matrix_handle_t handle_;
+    oneapi::math::sparse::matrix_handle_t handle_;
     sycl::queue& queue_;
 };
 
@@ -54,5 +56,6 @@ private:
 using v1::sparse_matrix_handle_impl;
 
 } // namespace oneapi::dal::detail
+*/
 
 #endif // ifdef ONEDAL_DATA_PARALLEL

@@ -18,14 +18,15 @@
 #include "oneapi/dal/backend/primitives/blas/syrk.hpp"
 #include "oneapi/dal/backend/primitives/blas/misc.hpp"
 
-#include <oneapi/mkl.hpp>
+// Swap MKL for oneMATH
+#include "oneapi/math.hpp"
 
 namespace oneapi::dal::backend::primitives {
 
 template <typename Float>
 static sycl::event syrk_wrapper(sycl::queue& queue,
-                                mkl::uplo uplo,
-                                mkl::transpose trans,
+                                oneapi::math::uplo uplo,
+                                oneapi::math::transpose trans,
                                 std::int64_t n,
                                 std::int64_t k,
                                 Float alpha,
@@ -35,15 +36,15 @@ static sycl::event syrk_wrapper(sycl::queue& queue,
                                 Float* c,
                                 std::int64_t ldc,
                                 const event_vector& deps) {
-    [[maybe_unused]] const bool is_trans = (trans == mkl::transpose::trans);
+    [[maybe_unused]] const bool is_trans = (trans == oneapi::math::transpose::trans);
     ONEDAL_ASSERT(ldc >= n);
     ONEDAL_ASSERT(is_trans || lda >= n);
     ONEDAL_ASSERT(!is_trans || lda >= k);
 
-    return mkl::blas::syrk(queue, uplo, trans, n, k, alpha, a, lda, beta, c, ldc, deps);
+    return oneapi::math::blas::column_major::syrk(queue, uplo, trans, n, k, alpha, a, lda, beta, c, ldc, deps);
 }
 
-template <mkl::uplo uplo, typename Float, ndorder ao>
+template <oneapi::math::uplo uplo, typename Float, ndorder ao>
 sycl::event syrk(sycl::queue& queue,
                  const ndview<Float, 2, ao>& a,
                  ndview<Float, 2>& c,
@@ -79,11 +80,12 @@ sycl::event syrk(sycl::queue& queue,
     INSTANTIATE(ul, float, ao)    \
     INSTANTIATE(ul, double, ao)
 
-#define INSTANTIATE_UPLO(ao)                \
-    INSTANTIATE_FLOAT(mkl::uplo::upper, ao) \
-    INSTANTIATE_FLOAT(mkl::uplo::lower, ao)
+#define INSTANTIATE_UPLO(ao)                    \
+    INSTANTIATE_FLOAT(oneapi::math::uplo::upper, ao) \
+    INSTANTIATE_FLOAT(oneapi::math::uplo::lower, ao)
 
 INSTANTIATE_UPLO(ndorder::c)
 INSTANTIATE_UPLO(ndorder::f)
 
 } // namespace oneapi::dal::backend::primitives
+ // namespace oneapi::dal::backend::primitives

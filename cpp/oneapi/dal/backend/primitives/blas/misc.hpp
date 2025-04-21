@@ -18,43 +18,51 @@
 
 #include "oneapi/dal/backend/primitives/ndarray.hpp"
 
-#include <oneapi/mkl.hpp>
+// Replacing MKL with oneMATH
+//#include <oneapi/math/blas.hpp>
+#include "oneapi/math.hpp"
 
 namespace oneapi::dal::backend::primitives {
 
-namespace mkl = oneapi::mkl;
-
 #ifdef ONEDAL_DATA_PARALLEL
-/// Convert oneDAL `ndorder` to oneMKL `layout`
-inline constexpr mkl::layout order_as_layout(ndorder order) {
-    return (order == ndorder::c) ? mkl::layout::R /* row-major */
-                                 : mkl::layout::C /* column-major */;
+
+/// Convert oneDAL `ndorder` to oneMATH `layout`
+inline constexpr oneapi::math::layout order_as_layout(ndorder order) {
+    return (order == ndorder::c) ? oneapi::math::layout::R /* row-major */
+                                 : oneapi::math::layout::C /* column-major */;
 }
 
-/// Convert oneDAL `transpose` to oneMKL `transpose`
-inline constexpr mkl::transpose transpose_to_mkl(primitives::transpose trans) {
-    return (trans == primitives::transpose::trans) ? mkl::transpose::trans
-                                                   : mkl::transpose::nontrans;
+/// Convert oneDAL `transpose` to oneMATH `transpose`
+inline constexpr oneapi::math::transpose transpose_to_onemath(primitives::transpose trans) {
+    return (trans == primitives::transpose::trans) ? oneapi::math::transpose::trans
+                                                   : oneapi::math::transpose::nontrans;
 }
 
-inline constexpr mkl::transpose f_order_as_transposed(ndorder order) {
-    return (order == ndorder::f) ? mkl::transpose::trans : mkl::transpose::nontrans;
+/// Mapping based on Fortran-style order
+inline constexpr oneapi::math::transpose f_order_as_transposed(ndorder order) {
+    return (order == ndorder::f) ? oneapi::math::transpose::trans : oneapi::math::transpose::nontrans;
 }
 
-inline constexpr mkl::transpose c_order_as_transposed(ndorder order) {
-    return (order == ndorder::c) ? mkl::transpose::trans : mkl::transpose::nontrans;
+/// Mapping based on C-style order
+inline constexpr oneapi::math::transpose c_order_as_transposed(ndorder order) {
+    return (order == ndorder::c) ? oneapi::math::transpose::trans : oneapi::math::transpose::nontrans;
 }
 
-inline constexpr mkl::uplo flip_uplo(mkl::uplo order) {
-    constexpr auto upper = mkl::uplo::upper;
-    constexpr auto lower = mkl::uplo::lower;
+/// Flip between upper/lower triangle
+inline constexpr oneapi::math::uplo flip_uplo(oneapi::math::uplo order) {
+    constexpr auto upper = oneapi::math::uplo::upper;
+    constexpr auto lower = oneapi::math::uplo::lower;
     return (order == upper) ? lower : upper;
 }
 
-inline constexpr mkl::uplo ident_uplo(mkl::uplo order) {
-    constexpr auto upper = mkl::uplo::upper;
-    constexpr auto lower = mkl::uplo::lower;
+/// Identity mapping (just for semantic clarity)
+inline constexpr oneapi::math::uplo ident_uplo(oneapi::math::uplo order) {
+    constexpr auto upper = oneapi::math::uplo::upper;
+    constexpr auto lower = oneapi::math::uplo::lower;
     return (order == upper) ? upper : lower;
 }
-#endif
+
+#endif // ONEDAL_DATA_PARALLEL
+
 } // namespace oneapi::dal::backend::primitives
+ // namespace oneapi::dal::backend::primitives

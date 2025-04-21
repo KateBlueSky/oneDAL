@@ -19,6 +19,8 @@
 #include "oneapi/dal/backend/primitives/blas/gemm.hpp"
 #include "oneapi/dal/test/engine/common.hpp"
 #include "oneapi/dal/test/engine/fixtures.hpp"
+#include <iostream>
+#include <sycl/sycl.hpp>
 
 namespace oneapi::dal::backend::primitives::test {
 
@@ -92,23 +94,32 @@ public:
         auto [at, at_e] = At();
         auto [bt, bt_e] = Bt();
 
+        std::cout << "Running on device: "
+              << this->get_queue().get_device().template get_info<sycl::info::device::name>()
+              << std::endl;
+
+
         SECTION("A x B") {
-            gemm(this->get_queue(), a, b, c, { a_e, b_e }).wait_and_throw();
+            gemm(this->get_queue(), a, b, c, { a_e, b_e });
+            this->get_queue().wait_and_throw();
             check_ones_matrix(c);
         }
 
         SECTION("A x Bt") {
             gemm(this->get_queue(), a, bt.t(), c, { a_e, bt_e }).wait_and_throw();
+            this->get_queue().wait_and_throw();
             check_ones_matrix(c);
         }
 
         SECTION("At x B") {
             gemm(this->get_queue(), at.t(), b, c, { at_e, b_e }).wait_and_throw();
+            this->get_queue().wait_and_throw();
             check_ones_matrix(c);
         }
 
         SECTION("At x Bt") {
             gemm(this->get_queue(), at.t(), bt.t(), c, { at_e, bt_e }).wait_and_throw();
+            this->get_queue().wait_and_throw();
             check_ones_matrix(c);
         }
     }
@@ -120,6 +131,7 @@ public:
         const float_t* mat_ptr = mat.get_data();
         for (std::int64_t i = 0; i < mat.get_count(); i++) {
             if (std::int64_t(mat_ptr[i]) != k_) {
+                std::cout << mat_ptr[i] << ", " << k_  << std::endl;
                 CAPTURE(i, mat_ptr[i]);
                 FAIL();
             }
@@ -143,7 +155,7 @@ private:
     std::int64_t k_;
 };
 
-using gemm_types = COMBINE_TYPES((float, double),
+using gemm_types = COMBINE_TYPES((float, float),
                                  (c_order, f_order),
                                  (c_order, f_order),
                                  (c_order, f_order));

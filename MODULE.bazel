@@ -132,6 +132,13 @@ onedal_repo(
     root_env_var = "DALROOT",
 )
 
+
+oneMath_repo = use_repo_rule("@onedal//dev/bazel/deps:oneMath.bzl", "oneMath_repo")
+oneMath_repo(
+    name = "oneMath",
+    root_env_var = "ONEMATH_ROOT",
+)
+
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
