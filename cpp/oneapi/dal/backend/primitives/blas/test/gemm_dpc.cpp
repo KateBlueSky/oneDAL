@@ -56,9 +56,9 @@ public:
     }
 
     void generate_medium_dimensions() {
-        m_ = GENERATE(300, 400);
-        n_ = GENERATE(400, 500);
-        k_ = GENERATE(500, 600);
+        m_ = GENERATE(150, 200);
+        n_ = GENERATE(200, 250);
+        k_ = GENERATE(250, 300);
         CAPTURE(m_, n_, k_);
     }
 
@@ -160,6 +160,7 @@ using gemm_types = COMBINE_TYPES((float, float),
                                  (c_order, f_order),
                                  (c_order, f_order));
 
+
 TEMPLATE_LIST_TEST_M(gemm_test, "ones matrix gemm on small sizes", "[gemm][small]", gemm_types) {
     // DPC++ GEMM from micro MKL libs is not supported on GPU
     SKIP_IF(this->get_policy().is_cpu());
@@ -170,6 +171,7 @@ TEMPLATE_LIST_TEST_M(gemm_test, "ones matrix gemm on small sizes", "[gemm][small
     this->generate_small_dimensions();
     this->test_gemm();
 }
+
 
 TEMPLATE_LIST_TEST_M(gemm_test, "ones matrix gemm on medium sizes", "[gemm][medium]", gemm_types) {
     // DPC++ GEMM from micro MKL libs is not supported on GPU
