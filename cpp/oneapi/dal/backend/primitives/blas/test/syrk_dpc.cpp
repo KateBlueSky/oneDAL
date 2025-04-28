@@ -32,13 +32,13 @@ struct order_tag {
 using c_order = order_tag<ndorder::c>;
 using f_order = order_tag<ndorder::f>;
 
-template <mkl::uplo uplo>
+template <oneapi::math::uplo uplo>
 struct uplo_tag {
     static constexpr auto value = uplo;
 };
 
-using upper = uplo_tag<mkl::uplo::upper>;
-using lower = uplo_tag<mkl::uplo::lower>;
+using upper = uplo_tag<oneapi::math::uplo::upper>;
+using lower = uplo_tag<oneapi::math::uplo::lower>;
 
 template <typename Param>
 class syrk_test : public te::float_algo_fixture<std::tuple_element_t<0, Param>> {
@@ -106,8 +106,8 @@ public:
         check_if_initialized();
         REQUIRE(mat.get_shape() == ndshape<2>{ n_, n_ });
 
-        constexpr bool is_upper = (ul == mkl::uplo::upper);
-        constexpr bool is_lower = (ul == mkl::uplo::lower);
+        constexpr bool is_upper = (ul == oneapi::math::uplo::upper);
+        constexpr bool is_lower = (ul == oneapi::math::uplo::lower);
 
         for (std::int64_t r = 0; r < n_; ++r) {
             for (std::int64_t c = r; is_lower && c < n_; ++c) {
