@@ -27,6 +27,15 @@
 #include "services/daal_defines.h"
 #include <mkl.h>
 
+#include <iostream>
+#include <vector>
+#include <chrono>
+#include <immintrin.h>
+#include <cstring>
+#include <cstdint>
+#include <cstring>
+#include <iostream>
+
 #define __DAAL_MKLFN_CALL_BLAS(f_name, f_args) f_name f_args;
 
 #define __DAAL_MKLFN_CALL_RETURN_BLAS(f_name, f_args, res) res = f_name f_args;
@@ -40,6 +49,11 @@ namespace mkl
 template <typename fpType, CpuType cpu>
 struct MklBlas
 {};
+
+
+
+
+
 
 /*
 // Double precision functions definition
@@ -150,6 +164,12 @@ struct MklBlas<double, cpu>
 // Single precision functions definition
 */
 
+
+
+
+
+
+
 template <CpuType cpu>
 struct MklBlas<float, cpu>
 {
@@ -191,14 +211,57 @@ struct MklBlas<float, cpu>
                                        aty, (MKL_INT *)ldaty));
     }
 
-    static void xxgemm(const char * transa, const char * transb, const DAAL_INT * p, const DAAL_INT * ny, const DAAL_INT * n, const float * alpha,
-                       const float * a, const DAAL_INT * lda, const float * y, const DAAL_INT * ldy, const float * beta, float * aty,
-                       const DAAL_INT * ldaty)
+
+    static void convert_f32_to_bf16(const float* src, uint16_t* dst, size_t size) {
+        size_t i = 0;
+
+        // Vectorized conversion using AVX512-BF16
+        #ifdef __AVX512BF16__
+        for (; i + 15 < size; i += 16) {
+            __m512 f = _mm512_loadu_ps(&src[i]);
+            __m256bh bf16 = _mm512_cvtneps_pbh(f);
+            _mm256_storeu_si256((__m256i*)(&dst[i]), (__m256i)bf16);
+        }
+        #endif
+
+        // Scalar fallback for remaining values
+        for (; i < size; ++i) {
+            uint32_t val;
+            memcpy(&val, &src[i], sizeof(float));
+            dst[i] = static_cast<uint16_t>(val >> 16);
+        }
+    }
+
+
+
+ static void xxgemm(const char* transa, const char* transb,
+                   const DAAL_INT* p, const DAAL_INT* ny, const DAAL_INT* n,
+                   const float* alpha, const float* a, const DAAL_INT* lda,
+                   const float* y, const DAAL_INT* ldy,
+                   const float* beta, float* aty, const DAAL_INT* ldaty)
     {
-        int old_nthr = mkl_set_num_threads_local(1);
-        __DAAL_MKLFN_CALL_BLAS(sgemm, (transa, transb, (MKL_INT *)p, (MKL_INT *)ny, (MKL_INT *)n, alpha, a, (MKL_INT *)lda, y, (MKL_INT *)ldy, beta,
+    // Unpack values from pointers
+    
+    int old_nthr = mkl_set_num_threads_local(1);
+        //__DAAL_MKLFN_CALL_BLAS(sgemm, (transa, transb, (MKL_INT *)p, (MKL_INT *)ny, (MKL_INT *)n, alpha, a, (MKL_INT *)lda, y, (MKL_INT *)ldy, beta,
+        //                               aty, (MKL_INT *)ldaty));
+    
+
+    MKL_INT M = *p;
+    MKL_INT N = *ny;
+    MKL_INT K = *n;
+    
+    std::cout << M << "," << N << "," << K << std::endl;
+    // Allocate and convert A and B to BF16
+    std::vector<uint16_t> a_bf(M * K), y_bf(K * N);
+    convert_f32_to_bf16(a, a_bf.data(), M * K);
+    convert_f32_to_bf16(y, y_bf.data(), K * N);
+
+    __DAAL_MKLFN_CALL_BLAS(gemm_bf16bf16f32, (transa, transb, (MKL_INT *)p, (MKL_INT *)ny, (MKL_INT *)n, alpha, a_bf.data(), (MKL_INT *)lda, y_bf.data(), (MKL_INT *)ldy, beta,
                                        aty, (MKL_INT *)ldaty));
-        mkl_set_num_threads_local(old_nthr);
+
+
+    mkl_set_num_threads_local(old_nthr);
     }
 
     static void xsymm(const char * side, const char * uplo, const DAAL_INT * m, const DAAL_INT * n, const float * alpha, const float * a,
