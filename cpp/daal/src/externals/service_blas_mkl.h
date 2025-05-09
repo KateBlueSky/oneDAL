@@ -243,23 +243,29 @@ struct MklBlas<float, cpu>
     // Unpack values from pointers
     
     int old_nthr = mkl_set_num_threads_local(1);
-        //__DAAL_MKLFN_CALL_BLAS(sgemm, (transa, transb, (MKL_INT *)p, (MKL_INT *)ny, (MKL_INT *)n, alpha, a, (MKL_INT *)lda, y, (MKL_INT *)ldy, beta,
-        //                               aty, (MKL_INT *)ldaty));
+       //__DAAL_MKLFN_CALL_BLAS(sgemm, (transa, transb, (MKL_INT *)p, (MKL_INT *)ny, (MKL_INT *)n, alpha, a, (MKL_INT *)lda, y, (MKL_INT *)ldy, beta, aty, (MKL_INT *)ldaty));
     
 
     MKL_INT M = *p;
     MKL_INT N = *ny;
     MKL_INT K = *n;
     
-    std::cout << M << "," << N << "," << K << std::endl;
+    //std::cout << "M= " << M << ", N= " << N << ", K=" << K << std::endl;
     // Allocate and convert A and B to BF16
-    std::vector<uint16_t> a_bf(M * K), y_bf(K * N);
-    convert_f32_to_bf16(a, a_bf.data(), M * K);
-    convert_f32_to_bf16(y, y_bf.data(), K * N);
+    //std::vector<uint16_t> a_bf(M * K), y_bf(K * N);
 
-    __DAAL_MKLFN_CALL_BLAS(gemm_bf16bf16f32, (transa, transb, (MKL_INT *)p, (MKL_INT *)ny, (MKL_INT *)n, alpha, a_bf.data(), (MKL_INT *)lda, y_bf.data(), (MKL_INT *)ldy, beta,
+    uint16_t* a_bf = new uint16_t[M * K];
+    uint16_t* y_bf = new uint16_t[K * N];
+    
+    convert_f32_to_bf16(a, a_bf, M * K);
+    convert_f32_to_bf16(y, y_bf, K * N);
+
+    __DAAL_MKLFN_CALL_BLAS(gemm_bf16bf16f32, (transa, transb, (MKL_INT *)p, (MKL_INT *)ny, (MKL_INT *)n, alpha, a_bf, (MKL_INT *)lda, y_bf, (MKL_INT *)ldy, beta,
                                        aty, (MKL_INT *)ldaty));
 
+
+    delete [] a_bf;
+    delete [] y_bf; 
 
     mkl_set_num_threads_local(old_nthr);
     }
