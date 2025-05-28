@@ -54,7 +54,7 @@ ifndef sample
 endif
 
 ifndef proc
-    proc = 2
+    proc = 4
 endif
 
 
@@ -142,7 +142,7 @@ EXT_LIB := $(LOPTS) $(LIBS)
 RES = $(addprefix $(RES_DIR)/, $(if $(filter run, $(mode)), $(addsuffix .res ,$(sample)), $(addsuffix .exe,$(sample))))
 
 CC = icpx -fsycl
-CRUN = mpirun
+CRUN = mpiexec
 RUNOPTS = -n $(proc) -ppn $(proc)
 
 
