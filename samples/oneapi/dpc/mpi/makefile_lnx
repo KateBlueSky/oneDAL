@@ -126,7 +126,7 @@ RES = $(addprefix $(RES_DIR)/, $(if $(filter run, $(mode)), $(addsuffix .res ,$(
 
 CC = icpx -fsycl
 CRUN = mpirun
-RUNOPTS = -n $(proc) -ppn $(proc)
+RUNOPTS = -n $(proc) -ppn $(proc) -genv I_MPI_DEBUG 5 -genv I_MPI_OFFLOAD_DEBUG 1
 
 
 .SECONDARY:

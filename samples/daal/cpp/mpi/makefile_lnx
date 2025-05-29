@@ -104,7 +104,7 @@ ifeq ($(compiler),gnu)
 endif
 
 CRUN = mpirun
-RUNOPTS = -n $(proc) -ppn 1
+RUNOPTS = -n $(proc) -ppn 1 -genv I_MPI_DEBUG 5 -genv I_MPI_OFFLOAD_DEBUG 1
 
 
 .SECONDARY:
