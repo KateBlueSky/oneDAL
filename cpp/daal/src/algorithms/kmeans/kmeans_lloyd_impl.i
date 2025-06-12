@@ -33,8 +33,7 @@
 #include "src/services/service_data_utils.h"
 
 #include "src/algorithms/kmeans/kmeans_lloyd_helper.h"
-#include <sycl/sycl.hpp>
-#include <sycl/ext/oneapi/bfloat16.hpp>
+#include <immintrin.h>
 #include <dnnl.hpp>
 
 namespace daal
