@@ -31,7 +31,7 @@ CORE.SERV.COMPILER.icx = generic
 -Qopt = $(if $(OS_is_win),-Qopt-,-qopt-)
 
 COMPILER.lnx.icx = icx -m64 \
-                     -Werror -Wreturn-type -qopenmp-simd -fsycl
+                     -Werror -Wreturn-type -qopenmp-simd
 COMPILER.lnx.icx += $(if $(filter yes,$(GCOV_ENABLED)),-coverage,)
 COMPILER.win.icx = icx $(if $(MSVC_RT_is_release),-MD -Qopenmp-simd, -MDd) -nologo -WX -Wno-deprecated-declarations
 
