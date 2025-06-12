@@ -33,6 +33,9 @@
 #include "src/services/service_data_utils.h"
 
 #include "src/algorithms/kmeans/kmeans_lloyd_helper.h"
+#include <sycl/sycl.hpp>
+#include <sycl/ext/oneapi/bfloat16.hpp>
+#include <dnnl.hpp>
 
 namespace daal
 {
@@ -45,22 +48,64 @@ namespace internal
 using namespace daal::internal;
 using namespace daal::services;
 using namespace daal::services::internal;
+using sycl::ext::oneapi::bfloat16;
+using namespace dnnl; 
 
 template <typename algorithmFPType, CpuType cpu>
 struct TaskKMeansLloyd
 {
     DAAL_NEW_DELETE();
 
+    std::vector<uint16_t> get_chunk_bf16(const std::vector<uint16_t>& data, std::size_t start, std::size_t length) {
+        if (start + length > data.size()) length = data.size() - start;
+    return std::vector<uint16_t>(data.begin() + start, data.begin() + start + length);
+    }
+
+  
+
+    // Specialization for float
+    void convert_to_bf16(const float* src, uint16_t* dst, size_t size) {
+        
+        size_t i = 0;
+        #ifdef __AVX512BF16__
+        for (; i + 15 < size; i += 16) {
+            __m512 f = _mm512_loadu_ps(&src[i]);
+            __m256bh bf16 = _mm512_cvtneps_pbh(f);
+            _mm256_storeu_si256((__m256i*)(&dst[i]), (__m256i)bf16);
+        }
+        #endif
+        for (; i < size; ++i) {
+            uint32_t val;
+            memcpy(&val, &src[i], sizeof(float));
+            dst[i] = static_cast<uint16_t>(val >> 16);
+        }
+    }
+
+    // Specialization for double
+    void convert_to_bf16(const double* src, uint16_t* dst, size_t size) {
+        for (size_t i = 0; i < size; ++i) {
+            float f = static_cast<float>(src[i]);  // cast down
+            uint32_t val;
+            memcpy(&val, &f, sizeof(float));
+            dst[i] = static_cast<uint16_t>(val >> 16);
+        }
+    }
+
+
     TaskKMeansLloyd(int _dim, int _clNum, algorithmFPType * _centroids, const size_t max_block_size)
     {
         dim      = _dim;
         clNum    = _clNum;
         cCenters = _centroids;
+        cCenters_bf16.resize(clNum * dim); 
+        convert_to_bf16(cCenters, cCenters_bf16.data(), clNum * dim);
 
         /* Allocate memory for all arrays inside TLS */
         tls_task = new daal::static_tls<TlsTask<algorithmFPType, cpu> *>([=]() -> TlsTask<algorithmFPType, cpu> * {
             return TlsTask<algorithmFPType, cpu>::create(dim, clNum, max_block_size);
         }); /* Allocate memory for all arrays inside TLS: end */
+
+        //convert_f32_to_bf16(cCenters, cCenters_bf16.data(), clNum * dim);
 
         clSq = service_scalable_calloc<algorithmFPType, cpu>(clNum);
         if (clSq)
@@ -72,7 +117,8 @@ struct TaskKMeansLloyd
                 PRAGMA_ICC_NO16(omp simd reduction(+ : sum))
                 for (size_t j = 0; j < dim; j++)
                 {
-                    sum += cCenters[k * dim + j] * cCenters[k * dim + j] * 0.5;
+                    sum += (float)cCenters_bf16[k * dim + j] * (float)cCenters_bf16[k * dim + j] * 0.5;
+                
                 }
                 clSq[k] = sum;
             }
@@ -99,6 +145,7 @@ struct TaskKMeansLloyd
         {
             result.reset();
         }
+    
         return result;
     }
 
@@ -127,6 +174,7 @@ struct TaskKMeansLloyd
     daal::static_tls<TlsTask<algorithmFPType, cpu> *> * tls_task;
     algorithmFPType * clSq;
     algorithmFPType * cCenters;
+    std::vector<uint16_t> cCenters_bf16;   
 
     int dim;
     int clNum;
@@ -134,28 +182,49 @@ struct TaskKMeansLloyd
     typedef typename Fp2IntSize<algorithmFPType>::IntT algIntType;
 };
 
+
+
+
+
+
 template <typename algorithmFPType, CpuType cpu>
 Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const NumericTable * const ntData, const algorithmFPType * const catCoef,
                                                                        const size_t blockSizeDefault, NumericTable * ntAssign)
 {
     const size_t n = ntData->getNumberOfRows();
+    const size_t n_columns = ntData->getNumberOfColumns();
+
 
     size_t nBlocks = n / blockSizeDefault;
     nBlocks += (nBlocks * blockSizeDefault != n);
 
+
+    engine eng(engine::kind::cpu, 0);
+
+    //row_accessor<const algorithmFPType> accessor(const_cast<NumericTable *>(ntData));
+
+    ReadRows<float, cpu> mtData(*const_cast<NumericTable *>(ntData), 0, n);
+    const float * const data_input = mtData.get();
+    std::vector<uint16_t> data_bf16(n * n_columns);
+    convert_to_bf16(data_input, data_bf16.data(), n * n_columns);
+
     SafeStatus safeStat;
     daal::static_threader_for(nBlocks, [=, &safeStat](const int k, size_t tid) {
+        stream s(eng);
+        
         struct TlsTask<algorithmFPType, cpu> * tt = tls_task->local(tid);
         DAAL_CHECK_MALLOC_THR(tt);
         const size_t blockSize = (k == nBlocks - 1) ? n - k * blockSizeDefault : blockSizeDefault;
 
-        ReadRows<algorithmFPType, cpu> mtData(*const_cast<NumericTable *>(ntData), k * blockSizeDefault, blockSize);
-        DAAL_CHECK_BLOCK_STATUS_THR(mtData);
-        const algorithmFPType * const data = mtData.get();
+        //ReadRows<algorithmFPType, cpu> mtData(*const_cast<NumericTable *>(ntData), k * blockSizeDefault, blockSize);
+        //DAAL_CHECK_BLOCK_STATUS_THR(mtData);
+        //const uint16_t * const data = mtData.get();
+        std::vector<uint16_t> data_bf16_chunk = get_chunk_bf16(data_bf16, k * blockSizeDefault * n_columns, blockSize * n_columns); 
+        //const uint16_t * const data = data_bf16_chunk.data();
 
         const size_t p                           = dim;
         const size_t nClusters                   = clNum;
-        const algorithmFPType * const inClusters = cCenters;
+        //const uint16_t * const inClusters = cCenters_bf16.data();
         const algorithmFPType * const clustersSq = clSq;
 
         algorithmFPType * trg        = &(tt->goalFunc);
@@ -182,6 +251,19 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
         const DAAL_INT ldy          = p;
         const algorithmFPType beta  = 1.0;
         const DAAL_INT ldaty        = blockSize;
+        memory::dims a_dims = { (int)_m, (int)_k };
+        memory::dims b_dims = { (int)_k, (int)_n };
+        memory::dims c_dims = { (int)_m, (int)_n };
+
+        auto a_md_bf16 = memory::desc(a_dims, memory::data_type::bf16, memory::format_tag::nc);
+        auto b_md_bf16 = memory::desc(b_dims, memory::data_type::bf16, memory::format_tag::nc);
+        auto c_md_bf32 = memory::desc(c_dims, memory::data_type::f32, memory::format_tag::nc);
+
+
+        auto a_mem_bf16 = memory(a_md_bf16, eng, data_bf16_chunk.data());
+        auto b_mem_bf16 = memory(b_md_bf16, eng, cCenters_bf16.data());
+        auto c_mem_bf32 = memory(c_md_bf32, eng, x_clusters);
+
 
         for (size_t j = 0; j < nClusters; j++)
         {
@@ -193,7 +275,20 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
             }
         }
 
-        BlasInst<algorithmFPType, cpu>::xxgemm(&transa, &transb, &_m, &_n, &_k, &alpha, data, &lda, inClusters, &ldy, &beta, x_clusters, &ldaty);
+
+
+        auto matmul_pd = matmul::primitive_desc(eng, a_md_bf16, b_md_bf16, c_md_bf32);
+        auto matmul_prim = matmul(matmul_pd);
+        matmul_prim.execute(s, {
+            { DNNL_ARG_SRC, a_mem_bf16 },
+            { DNNL_ARG_WEIGHTS, b_mem_bf16 },
+            { DNNL_ARG_DST, c_mem_bf32 }
+        });
+
+
+        s.wait();
+
+        //BlasInst<algorithmFPType, cpu>::xxgemm(&transa, &transb, &_m, &_n, &_k, &alpha, data, &lda, inClusters, &ldy, &beta, x_clusters, &ldaty);
 
         PRAGMA_ICC_OMP(simd simdlen(16))
         for (algIntType i = 0; i < (algIntType)blockSize; i++)
@@ -226,8 +321,8 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
             PRAGMA_FORCE_SIMD
             for (size_t j = 0; j < p; j++)
             {
-                cS1[minIdx * p + j] += data[i * p + j];
-                minGoalVal += data[i * p + j] * data[i * p + j];
+                cS1[minIdx * p + j] += (float)data_bf16_chunk[i * p + j];
+                minGoalVal += (float)data_bf16_chunk[i * p + j] * (float)data_bf16_chunk[i * p + j];
             }
 
             kmeansInsertCandidate(tt, minGoalVal, k * blockSizeDefault + i);
