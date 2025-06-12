@@ -47,7 +47,6 @@ namespace internal
 using namespace daal::internal;
 using namespace daal::services;
 using namespace daal::services::internal;
-using sycl::ext::oneapi::bfloat16;
 using namespace dnnl; 
 
 template <typename algorithmFPType, CpuType cpu>
