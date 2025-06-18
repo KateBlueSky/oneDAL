@@ -35,6 +35,7 @@
 #include "src/algorithms/kmeans/kmeans_lloyd_helper.h"
 #include <immintrin.h>
 #include <dnnl.hpp>
+#include <iostream>
 
 namespace daal
 {
@@ -244,23 +245,54 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
         const DAAL_INT _m           = blockSize;
         const DAAL_INT _n           = nClusters;
         const DAAL_INT _k           = p;
-        const algorithmFPType alpha = -1.0;
+        float alpha = -1.0;
         const DAAL_INT lda          = p;
         const DAAL_INT ldy          = p;
         const algorithmFPType beta  = 1.0;
         const DAAL_INT ldaty        = blockSize;
-        memory::dims a_dims = { (int)_m, (int)_k };
-        memory::dims b_dims = { (int)_k, (int)_n };
-        memory::dims c_dims = { (int)_m, (int)_n };
+        
+        
+        
+        
+        std::cout << "M: " << _m << " N: " << _n << " K: " << _k << " LDA: " << lda << " LDY: " << ldy << " LDATY: " << ldaty << " TA: " << transa << " TB: " << transb << std::endl;
+        
+        
+        memory::dims a_dims = { (int)_m, (int)_k }; //512 20
+       
 
-        auto a_md_bf16 = memory::desc(a_dims, memory::data_type::bf16, memory::format_tag::nc);
-        auto b_md_bf16 = memory::desc(b_dims, memory::data_type::bf16, memory::format_tag::nc);
-        auto c_md_bf32 = memory::desc(c_dims, memory::data_type::f32, memory::format_tag::nc);
+        memory::dims b_dims = { (int)_k, (int)_n }; //20
+        memory::dims c_dims = { (int)_m, (int)_n }; //512 20
+
+
+        memory::dims a_strides = {lda, 1}; //20
+        memory::dims b_strides = {1, ldy}; //20
+        memory::dims c_strides = {1, ldaty}; //512
+
+
+
+        auto a_md_bf16 = memory::desc(a_dims, memory::data_type::bf16, a_strides);
+        auto b_md_bf16 = memory::desc(b_dims, memory::data_type::bf16, b_strides);
+        auto c_md_bf32 = memory::desc(c_dims, memory::data_type::f32, c_strides);
+
+        primitive_attr attr;
+        attr.set_scales_mask(DNNL_ARG_WEIGHTS, /* mask */ 0);
+        post_ops po;
+        po.append_sum(1.0f);
+        attr.set_post_ops(po);
+    
+
+
+
+        //auto a_md_bf16 = memory::desc(a_dims, memory::data_type::bf16, memory::format_tag::ba);
+        //auto b_md_bf16 = memory::desc(b_dims, memory::data_type::bf16, memory::format_tag::ba);
+        //auto c_md_bf32 = memory::desc(c_dims, memory::data_type::f32, memory::format_tag::ba);
 
 
         auto a_mem_bf16 = memory(a_md_bf16, eng, data_bf16_chunk.data());
         auto b_mem_bf16 = memory(b_md_bf16, eng, cCenters_bf16.data());
         auto c_mem_bf32 = memory(c_md_bf32, eng, x_clusters);
+        
+        memory alpha_m({{1}, memory::data_type::f32, {1}}, eng, &alpha);
 
 
         for (size_t j = 0; j < nClusters; j++)
@@ -275,12 +307,13 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
 
 
 
-        auto matmul_pd = matmul::primitive_desc(eng, a_md_bf16, b_md_bf16, c_md_bf32);
+        auto matmul_pd = matmul::primitive_desc(eng, a_md_bf16, b_md_bf16, c_md_bf32, attr);
         auto matmul_prim = matmul(matmul_pd);
         matmul_prim.execute(s, {
             { DNNL_ARG_SRC, a_mem_bf16 },
             { DNNL_ARG_WEIGHTS, b_mem_bf16 },
-            { DNNL_ARG_DST, c_mem_bf32 }
+            { DNNL_ARG_DST, c_mem_bf32 },
+            {DNNL_ARG_ATTR_SCALES | DNNL_ARG_WEIGHTS, alpha_m}
         });
 
 
