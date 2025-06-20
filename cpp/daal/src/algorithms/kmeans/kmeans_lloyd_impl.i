@@ -32,10 +32,12 @@
 #include "src/externals/service_spblas.h"
 #include "src/services/service_data_utils.h"
 
+
 #include "src/algorithms/kmeans/kmeans_lloyd_helper.h"
+#include "oneapi/dnnl/dnnl.hpp"
 #include <immintrin.h>
-#include <dnnl.hpp>
 #include <iostream>
+#include <chrono>
 
 namespace daal
 {
@@ -48,23 +50,73 @@ namespace internal
 using namespace daal::internal;
 using namespace daal::services;
 using namespace daal::services::internal;
-using namespace dnnl; 
+using namespace dnnl;
 
 template <typename algorithmFPType, CpuType cpu>
 struct TaskKMeansLloyd
 {
     DAAL_NEW_DELETE();
 
-    std::vector<uint16_t> get_chunk_bf16(const std::vector<uint16_t>& data, std::size_t start, std::size_t length) {
-        if (start + length > data.size()) length = data.size() - start;
-    return std::vector<uint16_t>(data.begin() + start, data.begin() + start + length);
+
+    const engine &eng() {
+          static const engine eng(engine::kind::cpu, 0);
+         return eng;
     }
 
-  
+    matmul dynamic_matmul_create() {
+        // We assume that beta is known at the primitive creation time
+        
+        //engine eng(engine::kind::cpu, 0);
+        float beta = 1.0f;
+
+        memory::dims a_shape = {DNNL_RUNTIME_DIM_VAL, DNNL_RUNTIME_DIM_VAL};
+        memory::dims b_shape = {DNNL_RUNTIME_DIM_VAL, DNNL_RUNTIME_DIM_VAL};
+        memory::dims c_shape = {DNNL_RUNTIME_DIM_VAL, DNNL_RUNTIME_DIM_VAL};
+
+        memory::dims a_strides = {DNNL_RUNTIME_DIM_VAL, DNNL_RUNTIME_DIM_VAL};
+        memory::dims b_strides = {DNNL_RUNTIME_DIM_VAL, DNNL_RUNTIME_DIM_VAL};
+        memory::dims c_strides = {1, DNNL_RUNTIME_DIM_VAL};
+
+        memory::desc a_md(a_shape, memory::data_type::f32, a_strides);
+        memory::desc b_md(b_shape, memory::data_type::f32, b_strides);
+        memory::desc c_md(c_shape, memory::data_type::f32, c_strides);
+
+        // Create attributes (to handle alpha dynamically and beta if necessary)
+        primitive_attr attr;
+        attr.set_scales_mask(DNNL_ARG_WEIGHTS, /* mask */ 0);
+        post_ops po;
+        po.append_sum(beta);
+        attr.set_post_ops(po);
+    
+
+        // Create a MatMul primitive
+        matmul::primitive_desc matmul_pd(eng(), a_md, b_md, c_md, attr);
+        return matmul(matmul_pd);
+    }
+
+
+        std::vector<uint16_t> get_chunk_bf16(const std::vector<uint16_t>& data, std::size_t start, std::size_t length) {
+        if (start + length > data.size()) length = data.size() - start;
+            return std::vector<uint16_t>(data.begin() + start, data.begin() + start + length);
+    }
+
+
+
+    float bf16_to_float(uint16_t bf16_val) {
+        // Create a 32-bit unsigned int to hold the float bits
+        uint32_t float_bits = static_cast<uint32_t>(bf16_val) << 16;
+
+        // Reinterpret bits as float
+        float result;
+        std::memcpy(&result, &float_bits, sizeof(result));
+        return result;
+    }
+
+
 
     // Specialization for float
     void convert_to_bf16(const float* src, uint16_t* dst, size_t size) {
-        
+
         size_t i = 0;
         #ifdef __AVX512BF16__
         for (; i + 15 < size; i += 16) {
@@ -91,20 +143,108 @@ struct TaskKMeansLloyd
     }
 
 
+    void sgemm_execute(const char * transa, const char * transb, const DAAL_INT * p, const DAAL_INT * ny, const DAAL_INT * n,
+                   const double * alpha, const double * a, const DAAL_INT * lda, const double * y, const DAAL_INT * ldy,
+                   const double * beta, double * aty, const DAAL_INT * ldaty){}
+
+
+    void sgemm_execute(const char * transa, const char * transb, const DAAL_INT * p, const DAAL_INT * ny, const DAAL_INT * n,
+                    const float * alpha, const float * a, const DAAL_INT * lda, const float * y, const DAAL_INT * ldy,
+                    const float * beta, float * aty, const DAAL_INT * ldaty) { 
+            
+             char ta = (transa != nullptr) ? *transa : 'N';
+             char tb = (transb != nullptr) ? *transb : 'N';
+
+             // Call dnnl_sgemm
+             dnnl_status_t status = dnnl_sgemm(ta, tb,*p, *ny, *n, *alpha, a, *lda, y, *ldy, *beta, aty, *ldaty );
+
+             if (status != dnnl_success) {
+                 std::cerr << "dnnl_sgemm failed with status: " << status << std::endl;
+             // Optionally throw or assert here
+             }
+    }
+
+    void dynamic_matmul_execute(const char *transa, const char *transb,
+                                    const DAAL_INT *p, const DAAL_INT *ny, const DAAL_INT *n,
+                                    const double *alpha, const uint16_t *a, const DAAL_INT *lda,
+                                    const uint16_t *y, const DAAL_INT *ldy,
+                                    const double *beta, double *aty, const DAAL_INT *ldaty){}
+    
+    
+
+    void dynamic_matmul_execute(const char *transa, const char *transb,
+                                   const DAAL_INT *p, const DAAL_INT *ny, const DAAL_INT *n,
+                                   const float *alpha, const uint16_t *a, const DAAL_INT *lda,
+                                   const uint16_t *y, const DAAL_INT *ldy,
+                                   const float *beta, float *aty, const DAAL_INT *ldaty)
+    {
+       
+        //engine eng(engine::kind::cpu, 0);
+        using dims = memory::dims;
+        static const matmul matmul_p = dynamic_matmul_create();
+
+
+         // Validate inputs
+         if (beta == nullptr || *beta != 1.0f) {
+             throw std::logic_error("Run-time beta != 0.0 is not supported in this implementation.");
+         }
+
+         // Interpret transpose flags
+         char ta = (transa != nullptr) ? std::tolower(*transa) : 'n';
+         char tb = (transb != nullptr) ? std::tolower(*transb) : 'n';
+
+        // // Matrix sizes
+        int64_t M = static_cast<int64_t>(*p);
+        int64_t N = static_cast<int64_t>(*ny);
+        int64_t K = static_cast<int64_t>(*n);
+
+        int64_t lda_ = static_cast<int64_t>(*lda);
+        int64_t ldb_ = static_cast<int64_t>(*ldy);
+        int64_t ldc_ = static_cast<int64_t>(*ldaty);
+
+        // // Define strides based on transpose
+        //std::cout << "M: " << M << " N: " << N << " K: " << K << " LDA: " << lda_ << " LDB: " << ldb_ << " LDC: " << ldc_ << " TA: " << ta << " TB: " << tb << std::endl;
+        
+        dims a_shape = {M, K};
+        dims b_shape = {K, N};
+        dims c_shape = {M, N};
+
+        dims a_strides = (ta == 'n') ? dims{1, lda_} : dims{lda_, 1}; 
+        dims b_strides = (tb == 'n') ? dims{1, ldb_} : dims{ldb_, 1};
+        dims c_strides = {1, ldc_};
+
+        memory A_m({{M, K}, memory::data_type::bf16, a_strides}, eng(), (void *)a);
+        memory B_m({{K, N}, memory::data_type::bf16, b_strides}, eng(), (void *)y);
+        memory C_m({{M, N}, memory::data_type::f32, c_strides}, eng(), (void *)aty);
+
+        // Prepare oneDNN memory for alpha
+        float m_alpha = -1.0f;
+        memory alpha_m({{1}, memory::data_type::f32, {1}}, eng(), &m_alpha);
+
+        // Execute the MatMul primitive
+        stream s(eng());
+        matmul_p.execute(s,
+             {{DNNL_ARG_SRC, A_m}, {DNNL_ARG_WEIGHTS, B_m}, {DNNL_ARG_DST, C_m},
+                     {DNNL_ARG_ATTR_SCALES | DNNL_ARG_WEIGHTS, alpha_m}});
+        s.wait();
+    }
+
     TaskKMeansLloyd(int _dim, int _clNum, algorithmFPType * _centroids, const size_t max_block_size)
     {
         dim      = _dim;
         clNum    = _clNum;
         cCenters = _centroids;
+
         cCenters_bf16.resize(clNum * dim); 
         convert_to_bf16(cCenters, cCenters_bf16.data(), clNum * dim);
+
+
+
 
         /* Allocate memory for all arrays inside TLS */
         tls_task = new daal::static_tls<TlsTask<algorithmFPType, cpu> *>([=]() -> TlsTask<algorithmFPType, cpu> * {
             return TlsTask<algorithmFPType, cpu>::create(dim, clNum, max_block_size);
         }); /* Allocate memory for all arrays inside TLS: end */
-
-        //convert_f32_to_bf16(cCenters, cCenters_bf16.data(), clNum * dim);
 
         clSq = service_scalable_calloc<algorithmFPType, cpu>(clNum);
         if (clSq)
@@ -116,8 +256,7 @@ struct TaskKMeansLloyd
                 PRAGMA_ICC_NO16(omp simd reduction(+ : sum))
                 for (size_t j = 0; j < dim; j++)
                 {
-                    sum += (float)cCenters_bf16[k * dim + j] * (float)cCenters_bf16[k * dim + j] * 0.5;
-                
+                    sum += cCenters[k * dim + j] * cCenters[k * dim + j] * 0.5;
                 }
                 clSq[k] = sum;
             }
@@ -144,7 +283,6 @@ struct TaskKMeansLloyd
         {
             result.reset();
         }
-    
         return result;
     }
 
@@ -173,7 +311,8 @@ struct TaskKMeansLloyd
     daal::static_tls<TlsTask<algorithmFPType, cpu> *> * tls_task;
     algorithmFPType * clSq;
     algorithmFPType * cCenters;
-    std::vector<uint16_t> cCenters_bf16;   
+    std::vector<uint16_t> cCenters_bf16;
+
 
     int dim;
     int clNum;
@@ -181,49 +320,39 @@ struct TaskKMeansLloyd
     typedef typename Fp2IntSize<algorithmFPType>::IntT algIntType;
 };
 
-
-
-
-
-
 template <typename algorithmFPType, CpuType cpu>
 Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const NumericTable * const ntData, const algorithmFPType * const catCoef,
                                                                        const size_t blockSizeDefault, NumericTable * ntAssign)
 {
+
+   
     const size_t n = ntData->getNumberOfRows();
     const size_t n_columns = ntData->getNumberOfColumns();
 
 
     size_t nBlocks = n / blockSizeDefault;
+
+    //size_t nBlocks = 1;
     nBlocks += (nBlocks * blockSizeDefault != n);
-
-
-    engine eng(engine::kind::cpu, 0);
-
-    //row_accessor<const algorithmFPType> accessor(const_cast<NumericTable *>(ntData));
-
-    ReadRows<float, cpu> mtData(*const_cast<NumericTable *>(ntData), 0, n);
-    const float * const data_input = mtData.get();
-    std::vector<uint16_t> data_bf16(n * n_columns);
-    convert_to_bf16(data_input, data_bf16.data(), n * n_columns);
 
     SafeStatus safeStat;
     daal::static_threader_for(nBlocks, [=, &safeStat](const int k, size_t tid) {
-        stream s(eng);
-        
         struct TlsTask<algorithmFPType, cpu> * tt = tls_task->local(tid);
         DAAL_CHECK_MALLOC_THR(tt);
         const size_t blockSize = (k == nBlocks - 1) ? n - k * blockSizeDefault : blockSizeDefault;
 
-        //ReadRows<algorithmFPType, cpu> mtData(*const_cast<NumericTable *>(ntData), k * blockSizeDefault, blockSize);
-        //DAAL_CHECK_BLOCK_STATUS_THR(mtData);
-        //const uint16_t * const data = mtData.get();
-        std::vector<uint16_t> data_bf16_chunk = get_chunk_bf16(data_bf16, k * blockSizeDefault * n_columns, blockSize * n_columns); 
-        //const uint16_t * const data = data_bf16_chunk.data();
+        ReadRows<algorithmFPType, cpu> mtData(*const_cast<NumericTable *>(ntData), k * blockSizeDefault, blockSize);
+        DAAL_CHECK_BLOCK_STATUS_THR(mtData);
+        const algorithmFPType * const data = mtData.get();
+        std::vector<uint16_t> data_bf16(n * n_columns);
+        convert_to_bf16(data, data_bf16.data(), n * n_columns);
+
 
         const size_t p                           = dim;
         const size_t nClusters                   = clNum;
-        //const uint16_t * const inClusters = cCenters_bf16.data();
+        //const algorithmFPType * const inClusters = cCenters;
+        const uint16_t * const inClusters = cCenters_bf16.data();
+        
         const algorithmFPType * const clustersSq = clSq;
 
         algorithmFPType * trg        = &(tt->goalFunc);
@@ -245,55 +374,11 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
         const DAAL_INT _m           = blockSize;
         const DAAL_INT _n           = nClusters;
         const DAAL_INT _k           = p;
-        float alpha = -1.0;
+        const algorithmFPType alpha = -1.0;
         const DAAL_INT lda          = p;
         const DAAL_INT ldy          = p;
         const algorithmFPType beta  = 1.0;
         const DAAL_INT ldaty        = blockSize;
-        
-        
-        
-        
-        std::cout << "M: " << _m << " N: " << _n << " K: " << _k << " LDA: " << lda << " LDY: " << ldy << " LDATY: " << ldaty << " TA: " << transa << " TB: " << transb << std::endl;
-        
-        
-        memory::dims a_dims = { (int)_m, (int)_k }; //512 20
-       
-
-        memory::dims b_dims = { (int)_k, (int)_n }; //20
-        memory::dims c_dims = { (int)_m, (int)_n }; //512 20
-
-
-        memory::dims a_strides = {lda, 1}; //20
-        memory::dims b_strides = {1, ldy}; //20
-        memory::dims c_strides = {1, ldaty}; //512
-
-
-
-        auto a_md_bf16 = memory::desc(a_dims, memory::data_type::bf16, a_strides);
-        auto b_md_bf16 = memory::desc(b_dims, memory::data_type::bf16, b_strides);
-        auto c_md_bf32 = memory::desc(c_dims, memory::data_type::f32, c_strides);
-
-        primitive_attr attr;
-        attr.set_scales_mask(DNNL_ARG_WEIGHTS, /* mask */ 0);
-        post_ops po;
-        po.append_sum(1.0f);
-        attr.set_post_ops(po);
-    
-
-
-
-        //auto a_md_bf16 = memory::desc(a_dims, memory::data_type::bf16, memory::format_tag::ba);
-        //auto b_md_bf16 = memory::desc(b_dims, memory::data_type::bf16, memory::format_tag::ba);
-        //auto c_md_bf32 = memory::desc(c_dims, memory::data_type::f32, memory::format_tag::ba);
-
-
-        auto a_mem_bf16 = memory(a_md_bf16, eng, data_bf16_chunk.data());
-        auto b_mem_bf16 = memory(b_md_bf16, eng, cCenters_bf16.data());
-        auto c_mem_bf32 = memory(c_md_bf32, eng, x_clusters);
-        
-        memory alpha_m({{1}, memory::data_type::f32, {1}}, eng, &alpha);
-
 
         for (size_t j = 0; j < nClusters; j++)
         {
@@ -305,19 +390,11 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
             }
         }
 
+        //auto dynamic_matmul = dynamic_matmul_create();
 
+        //sgemm_execute(&transa, &transb, &_m, &_n, &_k, &alpha, data, &lda, inClusters, &ldy, &beta, x_clusters, &ldaty);
+        dynamic_matmul_execute(&transa, &transb, &_m, &_n, &_k, &alpha, data_bf16.data(), &lda, inClusters, &ldy, &beta, x_clusters, &ldaty);
 
-        auto matmul_pd = matmul::primitive_desc(eng, a_md_bf16, b_md_bf16, c_md_bf32, attr);
-        auto matmul_prim = matmul(matmul_pd);
-        matmul_prim.execute(s, {
-            { DNNL_ARG_SRC, a_mem_bf16 },
-            { DNNL_ARG_WEIGHTS, b_mem_bf16 },
-            { DNNL_ARG_DST, c_mem_bf32 },
-            {DNNL_ARG_ATTR_SCALES | DNNL_ARG_WEIGHTS, alpha_m}
-        });
-
-
-        s.wait();
 
         //BlasInst<algorithmFPType, cpu>::xxgemm(&transa, &transb, &_m, &_n, &_k, &alpha, data, &lda, inClusters, &ldy, &beta, x_clusters, &ldaty);
 
@@ -352,8 +429,8 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
             PRAGMA_FORCE_SIMD
             for (size_t j = 0; j < p; j++)
             {
-                cS1[minIdx * p + j] += (float)data_bf16_chunk[i * p + j];
-                minGoalVal += (float)data_bf16_chunk[i * p + j] * (float)data_bf16_chunk[i * p + j];
+                cS1[minIdx * p + j] += bf16_to_float(data_bf16[i * p + j]);
+                minGoalVal += bf16_to_float(data_bf16[i * p + j] * data_bf16[i * p + j]);
             }
 
             kmeansInsertCandidate(tt, minGoalVal, k * blockSizeDefault + i);
@@ -370,6 +447,8 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
 
         *trg += goal;
     }); /* daal::threader_for( nBlocks, nBlocks, [=](int k) */
+
+
     return safeStat.detach();
 }
 

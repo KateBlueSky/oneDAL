@@ -26,6 +26,7 @@
 #include "oneapi/dal/io/csv.hpp"
 
 #include "example_util/utils.hpp"
+#include <chrono>
 
 namespace dal = oneapi::dal;
 
@@ -42,6 +43,8 @@ void run(sycl::queue &q) {
     const auto x_test = dal::read<dal::table>(q, dal::csv::data_source{ test_data_file_name });
     const auto y_test = dal::read<dal::table>(q, dal::csv::data_source{ test_response_file_name });
 
+
+    auto start = std::chrono::high_resolution_clock::now();
     const auto kmeans_desc = dal::kmeans::descriptor<>()
                                  .set_cluster_count(20)
                                  .set_max_iteration_count(5)
@@ -61,6 +64,9 @@ void run(sycl::queue &q) {
                                        .set_accuracy_threshold(0.001);
 
     const auto result_test = dal::infer(q, kmeans_desc_infer, result_train.get_model(), x_test);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "Elapsed time: " << duration.count() << " milliseconds" << std::endl;
 
     std::cout << "Infer result:\n" << result_test.get_responses() << std::endl;
 

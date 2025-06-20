@@ -26,6 +26,8 @@
 
 #include "services/daal_defines.h"
 #include <mkl.h>
+#include <dnnl.h> 
+#include <iostream>
 
 #define __DAAL_MKLFN_CALL_BLAS(f_name, f_args) f_name f_args;
 
@@ -191,15 +193,47 @@ struct MklBlas<float, cpu>
                                        aty, (MKL_INT *)ldaty));
     }
 
-    static void xxgemm(const char * transa, const char * transb, const DAAL_INT * p, const DAAL_INT * ny, const DAAL_INT * n, const float * alpha,
-                       const float * a, const DAAL_INT * lda, const float * y, const DAAL_INT * ldy, const float * beta, float * aty,
-                       const DAAL_INT * ldaty)
-    {
-        int old_nthr = mkl_set_num_threads_local(1);
-        __DAAL_MKLFN_CALL_BLAS(sgemm, (transa, transb, (MKL_INT *)p, (MKL_INT *)ny, (MKL_INT *)n, alpha, a, (MKL_INT *)lda, y, (MKL_INT *)ldy, beta,
-                                       aty, (MKL_INT *)ldaty));
-        mkl_set_num_threads_local(old_nthr);
-    }
+
+//     static void xxgemm(const char * transa, const char * transb, const DAAL_INT * p, const DAAL_INT * ny, const DAAL_INT * n,
+//                   const float * alpha, const float * a, const DAAL_INT * lda, const float * y, const DAAL_INT * ldy,
+//                   const float * beta, float * aty, const DAAL_INT * ldaty)
+ //    {
+//     //int old_nthr = mkl_set_num_threads_local(1);
+
+//     // Convert transpose flags to characters (oneDNN expects values, not pointers)
+//     char ta = (transa != nullptr) ? *transa : 'N';
+//     char tb = (transb != nullptr) ? *transb : 'N';
+
+//     // Call dnnl_sgemm
+//     dnnl_status_t status = dnnl_sgemm(
+//         ta, tb,
+//         *p, *ny, *n,
+//         *alpha,
+//         a, *lda,
+//         y, *ldy,
+//         *beta,
+//         aty, *ldaty
+//     );
+
+//     if (status != dnnl_success) {
+//         std::cerr << "dnnl_sgemm failed with status: " << status << std::endl;
+//         // Optionally throw or assert here
+//     }
+
+//     //mkl_set_num_threads_local(old_nthr);
+// }
+
+  static void xxgemm(const char * transa, const char * transb, const DAAL_INT * p, const DAAL_INT * ny, const DAAL_INT * n, const float * alpha,
+                      const float * a, const DAAL_INT * lda, const float * y, const DAAL_INT * ldy, const float * beta, float * aty,
+                      const DAAL_INT * ldaty)
+   {
+       int old_nthr = mkl_set_num_threads_local(1);
+
+       __DAAL_MKLFN_CALL_BLAS(sgemm, (transa, transb, (MKL_INT *)p, (MKL_INT *)ny, (MKL_INT *)n, alpha, a, (MKL_INT *)lda, y, (MKL_INT *)ldy, beta,
+                                      aty, (MKL_INT *)ldaty));
+        
+       mkl_set_num_threads_local(old_nthr);
+   }
 
     static void xsymm(const char * side, const char * uplo, const DAAL_INT * m, const DAAL_INT * n, const float * alpha, const float * a,
                       const DAAL_INT * lda, const float * b, const DAAL_INT * ldb, const float * beta, float * c, const DAAL_INT * ldc)
