@@ -40,7 +40,7 @@
 #include <chrono>
 #include "src/services/service_profiler.h"
 #include <mkl.h>
-
+#include <mutex>
 
 namespace daal
 {
@@ -118,50 +118,65 @@ struct TaskKMeansLloyd
 
 
     // Specialization for float
-   __attribute__((target("avx512bf16")))
+ __attribute__((target("avx512bf16")))
 void convert_to_bf16(const float* src, uint16_t* dst, size_t size) {
-    
-    //auto start = std::chrono::high_resolution_clock::now();
+    const float* aligned_src = (const float*)__builtin_assume_aligned(src, 64);
+    uint16_t* aligned_dst = (uint16_t*)__builtin_assume_aligned(dst, 64);
+
     #pragma omp parallel
     {
         size_t i;
-        size_t unroll = 32; // unroll 2x16 (2 AVX-512 ops per iteration)
+        size_t unroll = 16; // 8 × 16 floats per iteration
 
-        #pragma omp for
+       #pragma omp for
         for (i = 0; i + unroll - 1 < size; i += unroll) {
-            // Unroll block 1
-            __m512 f1 = _mm512_loadu_ps(&src[i]);
+            __m512 f1 = _mm512_load_ps(&aligned_src[i]);
             __m256bh bf1 = _mm512_cvtneps_pbh(f1);
-            _mm256_storeu_si256((__m256i*)(&dst[i]), (__m256i)bf1);
+            _mm256_store_si256((__m256i*)&aligned_dst[i], (__m256i)bf1);
 
-            // Unroll block 2
-            __m512 f2 = _mm512_loadu_ps(&src[i + 16]);
+
+            /*
+
+            __m512 f2 = _mm512_load_ps(&aligned_src[i + 16]);
             __m256bh bf2 = _mm512_cvtneps_pbh(f2);
-            _mm256_storeu_si256((__m256i*)(&dst[i + 16]), (__m256i)bf2);
-        }
+            _mm256_store_si256((__m256i*)&aligned_dst[i + 16], (__m256i)bf2);
 
-        // Remaining vector-sized blocks
-        for (; i + 15 < size; i += 16) {
-            __m512 f = _mm512_loadu_ps(&src[i]);
-            __m256bh bf16 = _mm512_cvtneps_pbh(f);
-            _mm256_storeu_si256((__m256i*)(&dst[i]), (__m256i)bf16);
-        }
+        
+            __m512 f3 = _mm512_load_ps(&aligned_src[i + 32]);
+            __m256bh bf3 = _mm512_cvtneps_pbh(f3);
+            _mm256_store_si256((__m256i*)&aligned_dst[i + 32], (__m256i)bf3);
 
+            __m512 f4 = _mm512_load_ps(&aligned_src[i + 48]);
+            __m256bh bf4 = _mm512_cvtneps_pbh(f4);
+            _mm256_store_si256((__m256i*)&aligned_dst[i + 48], (__m256i)bf4);
+
+            __m512 f5 = _mm512_load_ps(&aligned_src[i + 64]);
+            __m256bh bf5 = _mm512_cvtneps_pbh(f5);
+            _mm256_store_si256((__m256i*)&aligned_dst[i + 64], (__m256i)bf5);
+
+            __m512 f6 = _mm512_load_ps(&aligned_src[i + 80]);
+            __m256bh bf6 = _mm512_cvtneps_pbh(f6);
+            _mm256_store_si256((__m256i*)&aligned_dst[i + 80], (__m256i)bf6);
+
+            __m512 f7 = _mm512_load_ps(&aligned_src[i + 96]);
+            __m256bh bf7 = _mm512_cvtneps_pbh(f7);
+            _mm256_store_si256((__m256i*)&aligned_dst[i + 96], (__m256i)bf7);
+
+            __m512 f8 = _mm512_load_ps(&aligned_src[i + 112]);
+            __m256bh bf8 = _mm512_cvtneps_pbh(f8);
+            _mm256_store_si256((__m256i*)&aligned_dst[i + 112], (__m256i)bf8);
+            */
+        }
         // Scalar tail
         for (; i < size; ++i) {
             uint32_t val;
-            memcpy(&val, &src[i], sizeof(float));
-            dst[i] = static_cast<uint16_t>(val >> 16);
+            memcpy(&val, &aligned_src[i], sizeof(float));
+            aligned_dst[i] = static_cast<uint16_t>(val >> 16);
         }
-    } 
-
-    /*
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed_seconds = end - start;
-    std::cerr << "Elapsed time: " << elapsed_seconds.count() << " seconds" << std::endl;
-    */
-
     }
+}
+
+    
 
     // Specialization for double
     void convert_to_bf16(const double* src, uint16_t* dst, size_t size) {
@@ -287,10 +302,11 @@ void convert_to_bf16(const float* src, uint16_t* dst, size_t size) {
         cCenters = _centroids;
 
 
-       // std::cerr << "Converting Centers." << std::endl;
-        cCenters_bf16.resize(clNum * dim); 
-        convert_to_bf16(cCenters, cCenters_bf16.data(), clNum * dim);
-       // std::cerr << "Done Converting Centers." << std::endl;
+       size_t alignment = 64; 
+        if (posix_memalign((void**)&cCenters_bf16, alignment, (clNum * dim) * sizeof(uint16_t)) != 0) {
+            std::cerr << "failed to align." << std::endl;
+        }
+        convert_to_bf16(cCenters, cCenters_bf16, clNum * dim);
 
 
 
@@ -364,7 +380,7 @@ void convert_to_bf16(const float* src, uint16_t* dst, size_t size) {
     daal::static_tls<TlsTask<algorithmFPType, cpu> *> * tls_task;
     algorithmFPType * clSq;
     algorithmFPType * cCenters;
-    std::vector<uint16_t> cCenters_bf16;
+    uint16_t * cCenters_bf16;
 
 
     int dim;
@@ -381,15 +397,28 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
    
     const size_t n = ntData->getNumberOfRows();
     const size_t n_columns = ntData->getNumberOfColumns();
+    static std::once_flag init_flag;
+    static std::vector<uint16_t> data_bf16;
+    static uint16_t* data_ptr = nullptr;
 
+    std::call_once(init_flag, [&]() {
+        size_t alignment = 64; 
+        if (posix_memalign((void**)&data_ptr, alignment, (n * n_columns) * sizeof(uint16_t)) != 0) {
+            std::cerr << "failed to align." << std::endl;
+        }
+        ReadRows<algorithmFPType, cpu> mtData(*const_cast<NumericTable *>(ntData), 0, n * n_columns);
+        //DAAL_CHECK_BLOCK_STATUS_THR(mtData);
+        const algorithmFPType * const data = mtData.get();
+        auto start = std::chrono::high_resolution_clock::now();
+        convert_to_bf16(data, data_ptr, n * n_columns);
+        auto end = std::chrono::high_resolution_clock::now();
+        double elapsed = std::chrono::duration<double>(end - start).count();
+        double bandwidth = (n * n_columns * (sizeof(float) + sizeof(uint16_t))) / (1e9 * elapsed);
 
+        std::cerr << "Conversion time: " << elapsed << " sec\n";
+        std::cerr << "Throughput: " << bandwidth << " GB/s\n";
 
-    ReadRows<algorithmFPType, cpu> mtData(*const_cast<NumericTable *>(ntData), 0, n * n_columns);
-    //DAAL_CHECK_BLOCK_STATUS_THR(mtData);
-    const algorithmFPType * const data = mtData.get();
-    std::vector<uint16_t> data_bf16(n * n_columns);
-    convert_to_bf16(data, data_bf16.data(), n * n_columns);
-    const uint16_t* data_ptr = data_bf16.data();
+     });
 
 
     //size_t bf16_blockSizeDefault = 1024;
@@ -418,7 +447,7 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
         const size_t p                           = dim;
         const size_t nClusters                   = clNum;
         //const algorithmFPType * const inClusters = cCenters;
-        const uint16_t * const inClusters = cCenters_bf16.data();
+        const uint16_t * const inClusters = cCenters_bf16;
         
         const algorithmFPType * const clustersSq = clSq;
 
