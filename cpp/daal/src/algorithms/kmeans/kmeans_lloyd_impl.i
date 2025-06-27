@@ -254,17 +254,17 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
         ReadRows<algorithmFPType, cpu> mtData(*const_cast<NumericTable *>(ntData), 0, n * n_columns);
         const algorithmFPType * const data = mtData.get();
         auto start = std::chrono::high_resolution_clock::now();
-        #pragma omp parallel sections
-        {
-            #pragma omp section
-            {
+        //#pragma omp parallel sections
+        //{
+         //   #pragma omp section
+         //   {
                 convert_to_bf16(data, data_ptr, n * n_columns);
-            }
-            #pragma omp section
-            {
+          //  }
+          //  #pragma omp section
+          //  {
                 convert_to_bf16(cCenters, cCenters_bf16_ptr, dim * clNum);
-            }
-        }
+          //  }
+        //}
         auto end = std::chrono::high_resolution_clock::now();
         double elapsed = std::chrono::duration<double>(end - start).count();
         double bandwidth = (n * n_columns * dim * clNum * (sizeof(float) + sizeof(MKL_BF16))) / (1e9 * elapsed);
