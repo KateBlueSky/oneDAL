@@ -40,6 +40,7 @@
 #include "src/services/service_profiler.h"
 #include <mkl.h>
 #include <mutex>
+#include "oneapi/dnnl/dnnl.hpp"
 
 namespace daal
 {
@@ -52,12 +53,50 @@ namespace internal
 using namespace daal::internal;
 using namespace daal::services;
 using namespace daal::services::internal;
-
+using namespace dnnl;
 
 template <typename algorithmFPType, CpuType cpu>
 struct TaskKMeansLloyd
 {
     DAAL_NEW_DELETE();
+
+    const engine &eng() {
+          static const engine eng(engine::kind::cpu, 0);
+         return eng;
+    }
+
+    matmul dynamic_matmul_create() {
+        // We assume that beta is known at the primitive creation time
+        std::cerr <<  "Creating"  << std::endl;
+        //engine eng(engine::kind::cpu, 0);
+        float beta = 1.0f;
+
+        memory::dims a_shape = {DNNL_RUNTIME_DIM_VAL, DNNL_RUNTIME_DIM_VAL};
+        memory::dims b_shape = {DNNL_RUNTIME_DIM_VAL, DNNL_RUNTIME_DIM_VAL};
+        memory::dims c_shape = {DNNL_RUNTIME_DIM_VAL, DNNL_RUNTIME_DIM_VAL};
+
+        memory::dims a_strides = {DNNL_RUNTIME_DIM_VAL, DNNL_RUNTIME_DIM_VAL};
+        memory::dims b_strides = {DNNL_RUNTIME_DIM_VAL, DNNL_RUNTIME_DIM_VAL};
+        memory::dims c_strides = {1, DNNL_RUNTIME_DIM_VAL};
+
+        memory::desc a_md(a_shape, memory::data_type::bf16, a_strides);
+        memory::desc b_md(b_shape, memory::data_type::bf16, b_strides);
+        memory::desc c_md(c_shape, memory::data_type::f32, c_strides);
+
+        // Create attributes (to handle alpha dynamically and beta if necessary)
+        primitive_attr attr;
+        attr.set_scales_mask(DNNL_ARG_WEIGHTS, /* mask */ 0);
+        post_ops po;
+        po.append_sum(beta);
+        attr.set_post_ops(po);
+    
+
+        // Create a MatMul primitive
+        matmul::primitive_desc matmul_pd(eng(), a_md, b_md, c_md, attr);
+        return matmul(matmul_pd);
+    }
+
+
 
     __attribute__((target("avx512bf16")))
     void convert_to_bf16(const float* src, MKL_BF16* dst, size_t size) {
@@ -120,7 +159,7 @@ struct TaskKMeansLloyd
     
     
 
-    
+    /*
     void dynamic_matmul_execute(const char *transa, const char *transb,
                                    const DAAL_INT *p, const DAAL_INT *ny, const DAAL_INT *n,
                                    const float *alpha, const MKL_BF16 *a, const DAAL_INT *lda,
@@ -133,7 +172,68 @@ struct TaskKMeansLloyd
         gemm_bf16bf16f32(transa, transb, (MKL_INT *)p, (MKL_INT *)ny, (MKL_INT *)n, alpha, a, (MKL_INT *)lda, y, (MKL_INT *)ldy, beta, aty, (MKL_INT *)ldaty);
         mkl_set_num_threads_local(old_nthr);
 
-    }
+    }*/
+
+
+    
+    void dynamic_matmul_execute(const char *transa, const char *transb,
+                                   const DAAL_INT *p, const DAAL_INT *ny, const DAAL_INT *n,
+                                   const float *alpha, const MKL_BF16 *a, const DAAL_INT *lda,
+                                   const MKL_BF16 *y, const DAAL_INT *ldy,
+                                   const float *beta, float *aty, const DAAL_INT *ldaty)
+    {
+       
+        //engine eng(engine::kind::cpu, 0);
+        using dims = memory::dims;
+        static const matmul matmul_p = dynamic_matmul_create();
+
+
+         // Validate inputs
+         if (beta == nullptr || *beta != 1.0f) {
+             throw std::logic_error("Run-time beta != 0.0 is not supported in this implementation.");
+         }
+
+         // Interpret transpose flags
+         char ta = (transa != nullptr) ? std::tolower(*transa) : 'n';
+         char tb = (transb != nullptr) ? std::tolower(*transb) : 'n';
+
+        // // Matrix sizes
+        int64_t M = static_cast<int64_t>(*p);
+        int64_t N = static_cast<int64_t>(*ny);
+        int64_t K = static_cast<int64_t>(*n);
+
+        int64_t lda_ = static_cast<int64_t>(*lda);
+        int64_t ldb_ = static_cast<int64_t>(*ldy);
+        int64_t ldc_ = static_cast<int64_t>(*ldaty);
+
+        // // Define strides based on transpose
+        //std::cout << "M: " << M << " N: " << N << " K: " << K << " LDA: " << lda_ << " LDB: " << ldb_ << " LDC: " << ldc_ << " TA: " << ta << " TB: " << tb << std::endl;
+        //std::cout << "Running." << std::endl;
+        //std::cerr << "Running." << std::endl;
+        dims a_shape = {M, K};
+        dims b_shape = {K, N};
+        dims c_shape = {M, N};
+
+        dims a_strides = (ta == 'n') ? dims{1, lda_} : dims{lda_, 1}; 
+        dims b_strides = (tb == 'n') ? dims{1, ldb_} : dims{ldb_, 1};
+        dims c_strides = {1, ldc_};
+
+        memory A_m({{M, K}, memory::data_type::bf16, a_strides}, eng(), (void *)a);
+        memory B_m({{K, N}, memory::data_type::bf16, b_strides}, eng(), (void *)y);
+        memory C_m({{M, N}, memory::data_type::f32, c_strides}, eng(), (void *)aty);
+
+        // Prepare oneDNN memory for alpha
+        float m_alpha = -1.0f;
+        memory alpha_m({{1}, memory::data_type::f32, {1}}, eng(), &m_alpha);
+
+        // Execute the MatMul primitive
+        stream s(eng());
+        matmul_p.execute(s,
+             {{DNNL_ARG_SRC, A_m}, {DNNL_ARG_WEIGHTS, B_m}, {DNNL_ARG_DST, C_m},
+                     {DNNL_ARG_ATTR_SCALES | DNNL_ARG_WEIGHTS, alpha_m}});
+        s.wait();
+    } 
+
 
 
     TaskKMeansLloyd(int _dim, int _clNum, algorithmFPType * _centroids, const size_t max_block_size)
