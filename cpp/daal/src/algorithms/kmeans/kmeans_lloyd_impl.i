@@ -387,23 +387,23 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
     static MKL_BF16* cCenters_bf16_ptr = nullptr; 
 
     std::call_once(init_flag, [&]() {
-        data_ptr = (MKL_BF16 *)mkl_calloc(n * n_columns, sizeof( MKL_BF16 ), 64);
-        cCenters_bf16_ptr = (MKL_BF16 *)mkl_calloc(dim * clNum, sizeof( MKL_BF16 ), 64);
+        data_ptr = (MKL_BF16 *)mkl_malloc(n * n_columns * sizeof(MKL_BF16), 64);
+        cCenters_bf16_ptr = (MKL_BF16 *)mkl_malloc(dim * clNum * sizeof(MKL_BF16), 64);
         ReadRows<algorithmFPType, cpu> mtData(*const_cast<NumericTable *>(ntData), 0, n * n_columns);
         const algorithmFPType * const data = mtData.get();
         auto start = std::chrono::high_resolution_clock::now();
-        //tbb::parallel_invoke( [&] { convert_to_bf16(data, data_ptr, n * n_columns); }, [&] { convert_to_bf16(cCenters, cCenters_bf16_ptr, dim * clNum); } );
+        tbb::parallel_invoke( [&] { convert_to_bf16(data, data_ptr, n * n_columns); }, [&] { convert_to_bf16(cCenters, cCenters_bf16_ptr, dim * clNum); } );
         
         
         //#pragma omp parallel sections
         //{
          //   #pragma omp section
          //   {
-                convert_to_bf16(data, data_ptr, n * n_columns);
+                //convert_to_bf16(data, data_ptr, n * n_columns);
           //  }
           //  #pragma omp section
           //  {
-                convert_to_bf16(cCenters, cCenters_bf16_ptr, dim * clNum);
+               // convert_to_bf16(cCenters, cCenters_bf16_ptr, dim * clNum);
           //  }
         //}
         auto end = std::chrono::high_resolution_clock::now();
