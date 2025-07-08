@@ -41,6 +41,7 @@
 #include <mkl.h>
 #include <mutex>
 #include "oneapi/dnnl/dnnl.hpp"
+#include <tbb/parallel_invoke.h>
 
 namespace daal
 {
@@ -97,7 +98,44 @@ struct TaskKMeansLloyd
     }
 
 
+    __attribute__((target("avx512bf16")))
+    void convert_block_avx512bf16(const float* src, uint16_t* dst, size_t size) {
+        constexpr size_t unroll = 16;
+        size_t i;
+        for (i = 0; i + unroll - 1 < size; i += unroll) {
+            __m512 f1 = _mm512_load_ps(&src[i]);
+            __m256bh bf1 = _mm512_cvtneps_pbh(f1);
+            _mm256_store_si256((__m256i*)&dst[i], (__m256i)bf1);
+        }
+        for (; i < size; ++i) {
+            uint32_t val;
+            std::memcpy(&val, &src[i], sizeof(float));
+            dst[i] = static_cast<uint16_t>(val >> 16);
+        }
+    }
 
+    
+    void convert_to_bf16(const float* src, uint16_t* dst, size_t size) {
+        const float* aligned_src = (const float*)__builtin_assume_aligned(src, 64);
+        uint16_t* aligned_dst = (uint16_t*)__builtin_assume_aligned(dst, 64);
+
+        constexpr size_t blockSize = 1024;
+        const size_t nBlocks = (size + blockSize - 1) / blockSize;
+    
+        daal::static_threader_for(nBlocks, [&](const size_t iBlock, size_t tid) {
+            const size_t startIdx = iBlock * blockSize;
+            const size_t endIdx   = (iBlock + 1 == nBlocks ? size : (iBlock + 1) * blockSize);
+            convert_block_avx512bf16(&aligned_src[startIdx], &aligned_dst[startIdx], endIdx - startIdx);
+        });
+    }
+
+
+
+
+
+
+
+    /*
     __attribute__((target("avx512bf16")))
     void convert_to_bf16(const float* src, MKL_BF16* dst, size_t size) {
     size_t i;
@@ -107,7 +145,7 @@ struct TaskKMeansLloyd
     MKL_BF16* dst_aligned = (MKL_BF16*)__builtin_assume_aligned(dst, 64);
 
 
-    #pragma omp parallel for
+    //#pragma omp parallel for
     for (i = 0; i + unroll - 1 < size; i += unroll) {
 
         __m512 float_vec_f1 = _mm512_loadu_ps(&src_aligned[i]);
@@ -127,7 +165,7 @@ struct TaskKMeansLloyd
         u.raw = src[i];
         dst[i] = u.int_part[1];
     }
-    }
+    } */
 
     void convert_to_bf16(const double* src, MKL_BF16 * dst, size_t size) {}
 
@@ -159,7 +197,7 @@ struct TaskKMeansLloyd
     
     
 
-    /*
+    
     void dynamic_matmul_execute(const char *transa, const char *transb,
                                    const DAAL_INT *p, const DAAL_INT *ny, const DAAL_INT *n,
                                    const float *alpha, const MKL_BF16 *a, const DAAL_INT *lda,
@@ -172,10 +210,10 @@ struct TaskKMeansLloyd
         gemm_bf16bf16f32(transa, transb, (MKL_INT *)p, (MKL_INT *)ny, (MKL_INT *)n, alpha, a, (MKL_INT *)lda, y, (MKL_INT *)ldy, beta, aty, (MKL_INT *)ldaty);
         mkl_set_num_threads_local(old_nthr);
 
-    }*/
+    }
 
 
-    
+    /*
     void dynamic_matmul_execute(const char *transa, const char *transb,
                                    const DAAL_INT *p, const DAAL_INT *ny, const DAAL_INT *n,
                                    const float *alpha, const MKL_BF16 *a, const DAAL_INT *lda,
@@ -232,7 +270,7 @@ struct TaskKMeansLloyd
              {{DNNL_ARG_SRC, A_m}, {DNNL_ARG_WEIGHTS, B_m}, {DNNL_ARG_DST, C_m},
                      {DNNL_ARG_ATTR_SCALES | DNNL_ARG_WEIGHTS, alpha_m}});
         s.wait();
-    } 
+    } */
 
 
 
@@ -354,6 +392,9 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
         ReadRows<algorithmFPType, cpu> mtData(*const_cast<NumericTable *>(ntData), 0, n * n_columns);
         const algorithmFPType * const data = mtData.get();
         auto start = std::chrono::high_resolution_clock::now();
+        //tbb::parallel_invoke( [&] { convert_to_bf16(data, data_ptr, n * n_columns); }, [&] { convert_to_bf16(cCenters, cCenters_bf16_ptr, dim * clNum); } );
+        
+        
         //#pragma omp parallel sections
         //{
          //   #pragma omp section
