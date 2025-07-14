@@ -34,6 +34,10 @@
 
 #include "src/algorithms/kmeans/kmeans_lloyd_helper.h"
 
+#include <chrono>
+#include <mutex>
+#include <iostream>
+
 namespace daal
 {
 namespace algorithms
@@ -138,13 +142,17 @@ template <typename algorithmFPType, CpuType cpu>
 Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const NumericTable * const ntData, const algorithmFPType * const catCoef,
                                                                        const size_t blockSizeDefault, NumericTable * ntAssign)
 {
+
+    std::mutex gemm_time_mutex;
+    double gemm_total_time_ms = 0.0;
+
     const size_t n = ntData->getNumberOfRows();
 
     size_t nBlocks = n / blockSizeDefault;
     nBlocks += (nBlocks * blockSizeDefault != n);
 
     SafeStatus safeStat;
-    daal::static_threader_for(nBlocks, [=, &safeStat](const int k, size_t tid) {
+    daal::static_threader_for(nBlocks, [=, &safeStat, &gemm_total_time_ms, &gemm_time_mutex](const int k, size_t tid) {
         struct TlsTask<algorithmFPType, cpu> * tt = tls_task->local(tid);
         DAAL_CHECK_MALLOC_THR(tt);
         const size_t blockSize = (k == nBlocks - 1) ? n - k * blockSizeDefault : blockSizeDefault;
@@ -193,7 +201,26 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
             }
         }
 
-        BlasInst<algorithmFPType, cpu>::xxgemm(&transa, &transb, &_m, &_n, &_k, &alpha, data, &lda, inClusters, &ldy, &beta, x_clusters, &ldaty);
+
+
+         auto gemm_start = std::chrono::high_resolution_clock::now();
+
+        BlasInst<algorithmFPType, cpu>::xxgemm(
+            &transa, &transb, &_m, &_n, &_k,
+            &alpha, data, &lda,
+            inClusters, &ldy,
+            &beta, x_clusters, &ldaty
+        );
+
+        auto gemm_end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> gemm_elapsed = gemm_end - gemm_start;
+
+
+        {
+            std::lock_guard<std::mutex> lock(gemm_time_mutex);
+            gemm_total_time_ms += gemm_elapsed.count();
+        }
+
 
         PRAGMA_ICC_OMP(simd simdlen(16))
         for (algIntType i = 0; i < (algIntType)blockSize; i++)
@@ -244,6 +271,12 @@ Status TaskKMeansLloyd<algorithmFPType, cpu>::addNTToTaskThreadedDense(const Num
 
         *trg += goal;
     }); /* daal::threader_for( nBlocks, nBlocks, [=](int k) */
+
+
+    std::cerr << "Average xxgemm time per thread: " << gemm_total_time_ms/nBlocks << " ms" << std::endl;
+
+
+
     return safeStat.detach();
 }
 
